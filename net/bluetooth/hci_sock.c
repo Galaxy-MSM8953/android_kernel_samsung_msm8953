@@ -48,7 +48,7 @@ struct hci_pinfo {
 
 static inline int hci_test_bit(int nr, const void *addr)
 {
-	return *((__u32 *) addr + (nr >> 5)) & ((__u32) 1 << (nr & 31));
+	return *((const __u32 *) addr + (nr >> 5)) & ((__u32) 1 << (nr & 31));
 }
 
 /* Security filter */
