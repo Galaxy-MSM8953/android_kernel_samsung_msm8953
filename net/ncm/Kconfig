@@ -5,4 +5,4 @@
 config KNOX_NCM
   tristate "Network Context Module Support"
   depends on NET
-  default y
+  default n
