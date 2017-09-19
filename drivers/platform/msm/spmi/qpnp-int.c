@@ -602,6 +602,11 @@ int qpnpint_unregister_controller(struct device_node *node)
 }
 EXPORT_SYMBOL(qpnpint_unregister_controller);
 
+#ifdef CONFIG_SEC_PM
+extern char last_resume_kernel_reason[];
+extern int last_resume_kernel_reason_len;
+#endif
+
 static int __qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
 		       struct qpnp_irq_spec *spec,
 		       bool show)
@@ -639,8 +644,16 @@ static int __qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
 		else if (desc->action && desc->action->name)
 			name = desc->action->name;
 
+#ifdef CONFIG_SEC_PM
+		printk("Resume caused by IRQ %d(PIN %lu) %s [0x%01x, 0x%02x,0x%01x]\n",
+				irq, hwirq, name, spec->slave, spec->per, spec->irq);
+		last_resume_kernel_reason_len +=
+			sprintf(last_resume_kernel_reason + last_resume_kernel_reason_len,
+			"%d,%lu,%s|", irq, hwirq, name);
+#else
 		pr_warn("%d triggered [0x%01x, 0x%02x,0x%01x] %s\n",
 				irq, spec->slave, spec->per, spec->irq, name);
+#endif
 	} else {
 		generic_handle_irq(irq);
 	}

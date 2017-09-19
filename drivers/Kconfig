@@ -20,6 +20,8 @@ source "drivers/block/Kconfig"
 
 source "drivers/misc/Kconfig"
 
+source "drivers/staging/samsung/sec_notifier/Kconfig"
+
 source "drivers/ide/Kconfig"
 
 source "drivers/scsi/Kconfig"
@@ -176,6 +178,8 @@ source "drivers/irqchip/Kconfig"
 
 source "drivers/ipack/Kconfig"
 
+source "drivers/battery/Kconfig"
+
 source "drivers/reset/Kconfig"
 
 source "drivers/fmc/Kconfig"
@@ -196,8 +200,18 @@ source "drivers/sensors/Kconfig"
 
 source "drivers/firmware/Kconfig"
 
+source "drivers/fingerprint/Kconfig"
+
 source "drivers/bif/Kconfig"
 
 source "drivers/gud/Kconfig"
+
+source "drivers/muic/Kconfig"
+
+source "drivers/motor/Kconfig"
+
+source "drivers/muic/universal/Kconfig"
+
+source "drivers/nfc/Kconfig"
 
 endmenu

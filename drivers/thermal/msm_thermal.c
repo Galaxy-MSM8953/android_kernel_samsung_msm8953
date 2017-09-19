@@ -49,6 +49,7 @@
 #include <linux/suspend.h>
 #include <linux/uaccess.h>
 #include <linux/uio_driver.h>
+#include <linux/sec_debug.h>
 
 #define CREATE_TRACE_POINTS
 #define TRACE_MSM_THERMAL
@@ -2708,6 +2709,7 @@ static void msm_thermal_bite(int zone_id, long temp)
 	int tsens_id = 0;
 	int ret = 0;
 
+	sec_debug_set_thermal_upload();
 	ret = zone_id_to_tsen_id(zone_id, &tsens_id);
 	if (ret < 0) {
 		pr_err("Zone:%d reached temperature:%ld. Err = %d System reset\n",
@@ -2725,6 +2727,14 @@ static void msm_thermal_bite(int zone_id, long temp)
 				 THERM_SECURE_BITE_CMD), &desc);
 	}
 }
+
+#ifdef CONFIG_USER_RESET_DEBUG_TEST
+void force_thermal_reset(void)
+{
+	msm_thermal_bite(0, msm_thermal_info.therm_reset_temp_degC);
+}
+EXPORT_SYMBOL(force_thermal_reset);
+#endif
 
 static int do_therm_reset(void)
 {

@@ -13,6 +13,9 @@
 
 #include <linux/kernel.h>
 #include <asm/mach/arch.h>
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 #include "board-dt.h"
 
 static const char *msm8917_dt_match[] __initconst = {
@@ -23,6 +26,9 @@ static const char *msm8917_dt_match[] __initconst = {
 
 static void __init msm8917_init(void)
 {
+#ifdef CONFIG_SEC_DEBUG
+	sec_debug_init();
+#endif
 	board_dt_populate(NULL);
 }
 

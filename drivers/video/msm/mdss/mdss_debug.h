@@ -144,7 +144,7 @@ int mdss_debug_register_base(const char *name, void __iomem *base,
 	size_t max_offset, struct mdss_debug_base **dbg_blk);
 void mdss_debug_register_dump_range(struct platform_device *pdev,
 	struct mdss_debug_base *blk_base, const char *ranges_prop,
-	const char *name_prop, const char *xin_prop);
+	const char *name_prop);
 int panel_debug_register_base(const char *name, void __iomem *base,
 				    size_t max_offset);
 int mdss_misr_set(struct mdss_data_type *mdata,

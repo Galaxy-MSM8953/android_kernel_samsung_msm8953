@@ -818,12 +818,18 @@ static ssize_t firmware_direct_write(struct file *filp, struct kobject *kobj,
 	struct firmware_priv *fw_priv = to_firmware_priv(dev);
 	struct firmware *fw;
 	ssize_t retval;
+	struct firmware_buf *buf; 
 
 	if (!capable(CAP_SYS_RAWIO))
 		return -EPERM;
 
 	mutex_lock(&fw_lock);
 	fw = fw_priv->fw;
+	buf = fw_priv->buf;
+	if (!buf) {
+		retval = -ENODEV;
+		goto out;
+	}
 	if (!fw || test_bit(FW_STATUS_DONE, &fw_priv->buf->status)) {
 		retval = -ENODEV;
 		goto out;

@@ -2364,8 +2364,25 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 
 	if ((topology == VPM_TX_SM_ECNS_COPP_TOPOLOGY) ||
 	    (topology == VPM_TX_DM_FLUENCE_COPP_TOPOLOGY) ||
-	    (topology == VPM_TX_DM_RFECNS_COPP_TOPOLOGY))
+	    (topology == VPM_TX_DM_RFECNS_COPP_TOPOLOGY)
+#ifdef CONFIG_SEC_VOC_SOLUTION
+	    || (topology == VPM_TX_SM_LVVEFQ_COPP_TOPOLOGY)
+	    || (topology == VPM_TX_DM_LVVEFQ_COPP_TOPOLOGY)
+	    || (topology == VPM_TX_SM_LVSAFQ_COPP_TOPOLOGY)
+	    || (topology == VOICE_TX_DIAMONDVOICE_FVSAM_DM)
+	    || (topology == VOICE_TX_DIAMONDVOICE_FVSAM_QM)
+#endif /* CONFIG_SEC_VOC_SOLUTION */
+	    )
 		rate = 16000;
+
+#ifdef CONFIG_SND_SOC_MSM8X16_RT5659
+	/* 
+	 * because ADSP cannot support 24bit recording,
+	 * fix to I2S tx bitwidth to 16bit
+	 */
+	if(port_id == AFE_PORT_ID_QUINARY_MI2S_TX)
+		bit_width = 16;
+#endif /* CONFIG_SND_SOC_MSM8X16_RT5659 */
 
 	copp_idx = adm_get_idx_if_copp_exists(port_idx, topology, perf_mode,
 						rate, bit_width, app_type);

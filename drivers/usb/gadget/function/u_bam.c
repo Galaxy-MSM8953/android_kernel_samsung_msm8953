@@ -1142,7 +1142,7 @@ static void gbam_notify(void *p, int event, unsigned long data)
 		break;
 	case BAM_DMUX_TRANSMIT_SIZE:
 		d = &port->data_ch;
-		if (test_bit(BAM_CH_OPENED, &d->flags))
+		if (d && test_bit(BAM_CH_OPENED, &d->flags))
 			pr_warn("%s, BAM channel opened already", __func__);
 		bam_mux_rx_req_size = data;
 		pr_debug("%s rx_req_size: %lu", __func__, bam_mux_rx_req_size);

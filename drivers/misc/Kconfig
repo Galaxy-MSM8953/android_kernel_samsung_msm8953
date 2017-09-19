@@ -304,6 +304,17 @@ config APDS9802ALS
 	  This driver can also be built as a module.  If so, the module
 	  will be called apds9802als.
 
+config SAMSUNG_JACK
+	bool "3.5 PI Jack driver for Samsung devices"
+	depends on INPUT
+	default n
+	help
+	 This is 3.5 PI JACK driver for Samsung devies.
+	 sec_jack from samsung driver used for samsung devices.
+
+	 To samsung jack is reviewed and supported in all the
+	 samsung devices.
+
 config ISL29003
 	tristate "Intersil ISL29003 ambient light sensor"
 	depends on I2C && SYSFS
@@ -323,6 +334,12 @@ config ISL29020
 
 	  This driver can also be built as a module.  If so, the module
 	  will be called isl29020.
+
+config KNOX_KAP
+       bool "Enable KNOX KAP mode"
+       default n
+       help 
+              Knox Active Protection mode
 
 config SENSORS_TSL2550
 	tristate "Taos TSL2550 ambient light sensor"
@@ -364,6 +381,18 @@ config SENSORS_APDS990X
 
 	   To compile this driver as a module, choose M here: the
 	   module will be called apds990x. If unsure, say N here.
+
+config TIMA_LOG
+	tristate "Support for dumping TIMA log"
+	default y
+	help
+	  This option enables support for dumping TIMA log
+
+config TIMA_TEST
+	tristate "Tima Test Suite"
+	default n
+	help
+	  This option enables kernel component of tima test suite
 
 config HMC6352
 	tristate "Honeywell HMC6352 compass"
@@ -581,6 +610,18 @@ config QPNP_MISC
 	  and the driver provides an API to check if this interrupt
 	  is available on the current PMIC chip.
 
+config SEC_MPP_SHARE
+	bool "Samsung MPP share"
+	help
+	  Say Y to include support for mpp share
+
+config SEC_MPP_SHARE_LOW_TEMP_WA
+	bool "Samsung MPP share Low Temp WA"
+	help
+	  Say Y to include support for MUX share WA.
+	  When EAR_ADC_3.5 and BAT_THM use same MUX Switch IC,
+	  connect some non-official earphone, will cause BAT_THM Low Temp.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
@@ -595,4 +636,5 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/bhy/Kconfig"
 endmenu

@@ -206,6 +206,16 @@ static inline pte_t pte_mkspecial(pte_t pte)
 	return set_pte_bit(pte, __pgprot(PTE_SPECIAL));
 }
 
+#ifdef CONFIG_TIMA_LKMAUTH
+#ifdef CONFIG_TIMA_LKMAUTH_CODE_PROT
+static inline pte_t pte_mknexec(pte_t pte)
+{
+	pte_val(pte) |= PTE_PXN;
+	return pte;
+}
+#endif
+#endif
+
 static inline void set_pte(pte_t *ptep, pte_t pte)
 {
 	*ptep = pte;

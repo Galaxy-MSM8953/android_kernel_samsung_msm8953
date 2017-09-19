@@ -81,7 +81,8 @@ struct synaptics_dsx_button_map {
  * @bus_reg_name: pointer to name of regulator for bus pullup control
  * @cap_button_map: pointer to 0D button map
  * @vir_button_map: pointer to virtual button map
- * @resume_in_workqueue: defer resume function to workqueue
+ * @firmware_name: pointer to name of firmware
+ * @firmware_name_bl: pointer to name of bl firmware
  */
 struct synaptics_dsx_board_data {
 	bool x_flip;
@@ -110,6 +111,11 @@ struct synaptics_dsx_board_data {
 	const char *bus_reg_name;
 	struct synaptics_dsx_button_map *cap_button_map;
 	struct synaptics_dsx_button_map *vir_button_map;
+	const char *firmware_name;
+	const char *firmware_name_bl;
+#ifdef CONFIG_SEC_INCELL
+	unsigned int lcd_id;
+#endif
 };
 
 #endif

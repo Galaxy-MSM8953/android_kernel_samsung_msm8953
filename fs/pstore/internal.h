@@ -51,6 +51,12 @@ extern void pstore_register_pmsg(void);
 static inline void pstore_register_pmsg(void) {}
 #endif
 
+#ifdef CONFIG_PSTORE_PMSG_SSPLOG
+extern int ss_hook_pmsg(char *buffer, size_t count);
+#else
+static inline int ss_hook_pmsg(char *buffer, size_t count) {return 0;}
+#endif
+
 extern struct pstore_info *psinfo;
 
 extern void	pstore_set_kmsg_bytes(int);

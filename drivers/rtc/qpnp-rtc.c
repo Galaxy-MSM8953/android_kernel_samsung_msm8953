@@ -21,7 +21,24 @@
 #include <linux/spinlock.h>
 #include <linux/spmi.h>
 #include <linux/alarmtimer.h>
+#ifdef CONFIG_RTC_AUTO_PWRON
+#include <linux/reboot.h>
+#include <linux/wakelock.h>
+#include <linux/alarmtimer.h>
+#include <linux/time.h>
 
+#define SAPA_START_POLL_TIME   (10LL * NSEC_PER_SEC) // 10 sec
+#define SAPA_BOOTING_TIME      (3*60) // 3 min
+#define SAPA_POLL_TIME         (15*60) //15 min
+
+enum {
+	SAPA_DISTANT = 0,
+	SAPA_NEAR,
+	SAPA_EXPIRED,
+	SAPA_OVER
+};
+extern int poweroff_charging;
+#endif
 /* RTC/ALARM Register offsets */
 #define REG_OFFSET_ALARM_RW	0x40
 #define REG_OFFSET_ALARM_CTRL1	0x46
@@ -65,6 +82,14 @@ struct qpnp_rtc {
 	struct rtc_device *rtc;
 	struct spmi_device *spmi;
 	spinlock_t alarm_ctrl_lock;
+#ifdef CONFIG_RTC_AUTO_PWRON
+	struct rtc_wkalrm   sapa;
+	struct alarm        check_poll;
+	struct work_struct  check_func;
+	struct wake_lock    wakelock;
+	int                 lpm_mode;
+	unsigned char       triggered;
+#endif
 };
 
 static int qpnp_read_wrapper(struct qpnp_rtc *rtc_dd, u8 *rtc_val,
@@ -390,6 +415,9 @@ qpnp_rtc_alarm_irq_enable(struct device *dev, unsigned int enabled)
 	u8 ctrl_reg;
 	u8 value[4] = {0};
 
+#ifdef CONFIG_RTC_AUTO_PWRON
+	pr_info("sapa irq=%d\n", enabled);
+#endif
 	spin_lock_irqsave(&rtc_dd->alarm_ctrl_lock, irq_flags);
 	ctrl_reg = rtc_dd->alarm_ctrl_reg1;
 	ctrl_reg = enabled ? (ctrl_reg | BIT_RTC_ALARM_ENABLE) :
@@ -418,10 +446,185 @@ rtc_rw_fail:
 	return rc;
 }
 
+#ifdef CONFIG_RTC_AUTO_PWRON
+static int
+sapa_rtc_getalarm(struct device *dev, struct rtc_wkalrm *alarm)
+{
+	struct qpnp_rtc *rtc_dd = dev_get_drvdata(dev);
+
+	alarm->enabled = rtc_dd->triggered;
+	return 1;
+}
+
+static int
+sapa_rtc_setalarm(struct device *dev, struct rtc_wkalrm *alarm)
+{
+	struct qpnp_rtc *rtc_dd = dev_get_drvdata(dev);
+
+	memcpy(&rtc_dd->sapa, alarm, sizeof(struct rtc_wkalrm));
+
+	return 0;
+}
+
+static int
+sapa_check_state(struct qpnp_rtc *rtc_dd, unsigned long *data)
+{
+	unsigned long rtc_secs;
+	unsigned long secs_pwron;
+	u8 value[4];
+	int rc;
+	int res = SAPA_NEAR;
+	
+	rc = qpnp_read_wrapper(rtc_dd, value,
+			rtc_dd->rtc_base + REG_OFFSET_RTC_READ, NUM_8_BIT_RTC_REGS);
+	if (rc)
+		pr_err("%s: rtc read failed.\n", __func__);
+	rtc_secs = TO_SECS(value);
+
+	rtc_tm_to_time(&rtc_dd->sapa.time, &secs_pwron);
+
+	if ( rtc_secs < secs_pwron ) {
+		if (rtc_secs < secs_pwron-SAPA_POLL_TIME)
+			res = SAPA_DISTANT;
+		if ( data )
+			*data = secs_pwron - rtc_secs;
+ 	}
+	else if ( rtc_secs <= secs_pwron+SAPA_BOOTING_TIME ) {
+		res = SAPA_EXPIRED;
+		if ( data )
+			*data = rtc_secs+10;
+ 	}
+	else 
+		res = SAPA_OVER;
+	
+	pr_info("%s: rtc:%lu, alrm:%lu[%d]\n", __func__, rtc_secs, secs_pwron, res);
+	return res;
+}
+
+static void
+sapa_check_func(struct work_struct *work)
+{
+	struct qpnp_rtc *rtc_dd = container_of(work, struct qpnp_rtc, check_func); 
+	int res;
+	unsigned long remain;
+
+	res = sapa_check_state(rtc_dd, &remain);
+	if ( res <=  SAPA_NEAR ) {
+		ktime_t kt;
+		if (res==SAPA_DISTANT)
+			remain = SAPA_POLL_TIME;
+		kt = ns_to_ktime( (u64)remain * NSEC_PER_SEC );
+		alarm_start_relative(&rtc_dd->check_poll, kt);
+		pr_info("%s: next %lu s\n", __func__, remain);
+	}
+	else if ( res == SAPA_EXPIRED ) {
+		wake_lock(&rtc_dd->wakelock);
+		rtc_dd->triggered = 1;
+	}
+}
+
+static enum alarmtimer_restart
+sapa_check_callback(struct alarm *alarm, ktime_t now)
+{
+	struct qpnp_rtc *rtc_dd = container_of(alarm, struct qpnp_rtc, check_poll); 
+
+	schedule_work(&rtc_dd->check_func);
+	return ALARMTIMER_NORESTART;
+}
+
+inline static void
+sapa_load_alarm(struct qpnp_rtc *rtc_dd, u8 ctrl_reg)
+{
+	unsigned long alarm_secs;
+	u8 value[4];
+	int rc;
+
+	rc = qpnp_read_wrapper(rtc_dd, value,
+			rtc_dd->alarm_base + REG_OFFSET_ALARM_RW, NUM_8_BIT_RTC_REGS);
+	if (rc) {
+		pr_err("%s: alarm read failed\n", __func__);
+		return ;
+	}
+	alarm_secs = TO_SECS(value);
+
+	rtc_time_to_tm(alarm_secs, &rtc_dd->sapa.time);
+	rtc_dd->sapa.enabled = ctrl_reg & BIT_RTC_ALARM_ENABLE;
+
+	pr_info("%s: alarm_reg=%02x, pmic=%lu\n", __func__, ctrl_reg, alarm_secs);
+}
+
+
+inline static void
+sapa_init(struct qpnp_rtc *rtc_dd)
+{
+	ktime_t kt;
+
+	rtc_dd->lpm_mode = poweroff_charging;
+	rtc_dd->triggered = 0;
+	
+	if ( rtc_dd->lpm_mode && rtc_dd->sapa.enabled ) {
+		wake_lock_init(&rtc_dd->wakelock, WAKE_LOCK_SUSPEND, "SAPA");
+
+		alarm_init(&rtc_dd->check_poll, ALARM_REALTIME, sapa_check_callback);
+		INIT_WORK(&rtc_dd->check_func, sapa_check_func);
+
+		kt = ns_to_ktime(SAPA_START_POLL_TIME);
+		alarm_start_relative(&rtc_dd->check_poll, kt);
+	}
+}
+
+inline static void 
+sapa_exit(struct qpnp_rtc *rtc_dd)
+{
+	pr_info("%s\n", __func__);
+
+	if ( rtc_dd->lpm_mode && rtc_dd->sapa.enabled ) {
+		cancel_work_sync(&rtc_dd->check_func);
+		alarm_cancel(&rtc_dd->check_poll);
+		wake_lock_destroy(&rtc_dd->wakelock);
+	}
+
+	if ( !rtc_dd->triggered ) {
+		struct rtc_wkalrm *alarm;
+		int rc;
+		
+		if (rtc_dd->sapa.enabled) {
+			unsigned long shutdown_delayed_time;
+			int res = sapa_check_state(rtc_dd, &shutdown_delayed_time);
+
+			if ( res == SAPA_EXPIRED ) { /* adjust alarm time */
+				rtc_time_to_tm(shutdown_delayed_time, &rtc_dd->sapa.time);
+				pr_info("%s: adjust %lu\n", __func__, shutdown_delayed_time);
+			}
+			else if ( res == SAPA_OVER ) { /* clear past alarm */ 
+				rtc_dd->sapa.enabled = 0;
+				pr_info("%s: over - clear\n", __func__);
+			}
+		}
+
+		alarm = &rtc_dd->sapa;
+		rc = qpnp_rtc_set_alarm(rtc_dd->rtc_dev, alarm);
+		if ( rc < 0 )
+			pr_err("%s: err=%d\n", __func__, rc);
+
+		rc = qpnp_rtc_read_alarm(rtc_dd->rtc_dev, alarm);
+		if ( !rc ) {
+			pr_info("%s: %d-%02d-%02d %02d:%02d:%02d\n", __func__,
+				alarm->time.tm_year, alarm->time.tm_mon, alarm->time.tm_mday,
+				alarm->time.tm_hour, alarm->time.tm_min, alarm->time.tm_sec);
+		}
+	}
+}
+#endif /*CONFIG_RTC_AUTO_PWRON*/
+
 static struct rtc_class_ops qpnp_rtc_ops = {
 	.read_time = qpnp_rtc_read_time,
 	.set_alarm = qpnp_rtc_set_alarm,
 	.read_alarm = qpnp_rtc_read_alarm,
+#ifdef CONFIG_RTC_AUTO_PWRON
+	.read_bootalarm = sapa_rtc_getalarm,
+	.set_bootalarm  = sapa_rtc_setalarm,
+#endif /*CONFIG_RTC_AUTO_PWRON*/
 	.alarm_irq_enable = qpnp_rtc_alarm_irq_enable,
 };
 
@@ -572,6 +775,10 @@ static int qpnp_rtc_probe(struct spmi_device *spmi)
 			"Read from  Alarm control reg failed\n");
 		goto fail_rtc_enable;
 	}
+#ifdef CONFIG_RTC_AUTO_PWRON
+	sapa_load_alarm(rtc_dd, rtc_dd->alarm_ctrl_reg1);
+#endif
+
 	/* Enable abort enable feature */
 	rtc_dd->alarm_ctrl_reg1 |= BIT_RTC_ABORT_ENABLE;
 	rc = qpnp_write_wrapper(rtc_dd, &rtc_dd->alarm_ctrl_reg1,
@@ -608,6 +815,10 @@ static int qpnp_rtc_probe(struct spmi_device *spmi)
 		goto fail_req_irq;
 	}
 
+#ifdef CONFIG_RTC_AUTO_PWRON
+	sapa_init(rtc_dd);
+#endif
+
 	device_init_wakeup(&spmi->dev, 1);
 	enable_irq_wake(rtc_dd->rtc_alarm_irq);
 
@@ -637,12 +848,16 @@ static int qpnp_rtc_remove(struct spmi_device *spmi)
 
 static void qpnp_rtc_shutdown(struct spmi_device *spmi)
 {
+#ifdef CONFIG_RTC_AUTO_PWRON
+	struct qpnp_rtc *rtc_dd;
+#else
 	u8 value[4] = {0};
 	u8 reg;
 	int rc;
 	unsigned long irq_flags;
 	struct qpnp_rtc *rtc_dd;
 	bool rtc_alarm_powerup;
+#endif
 
 	if (!spmi) {
 		pr_err("qpnp-rtc: spmi device not found\n");
@@ -653,8 +868,11 @@ static void qpnp_rtc_shutdown(struct spmi_device *spmi)
 		pr_err("qpnp-rtc: rtc driver data not found\n");
 		return;
 	}
+#ifdef CONFIG_RTC_AUTO_PWRON
+	sapa_exit(rtc_dd);
+#else
 	rtc_alarm_powerup = rtc_dd->rtc_alarm_powerup;
-	if (!rtc_alarm_powerup && !poweron_alarm) {
+	if (!rtc_alarm_powerup /*&& !poweron_alarm*/) {
 		spin_lock_irqsave(&rtc_dd->alarm_ctrl_lock, irq_flags);
 		dev_dbg(&spmi->dev, "Disabling alarm interrupts\n");
 
@@ -678,6 +896,7 @@ static void qpnp_rtc_shutdown(struct spmi_device *spmi)
 fail_alarm_disable:
 		spin_unlock_irqrestore(&rtc_dd->alarm_ctrl_lock, irq_flags);
 	}
+#endif
 }
 
 static struct of_device_id spmi_match_table[] = {

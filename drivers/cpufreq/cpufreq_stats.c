@@ -524,6 +524,12 @@ static void cpufreq_allstats_create(unsigned int cpu,
 	struct all_cpufreq_stats *all_stat;
 	bool sort_needed = false;
 
+#ifdef CONFIG_SEC_PM
+	if (!all_freq_table) {
+		pr_warn("all_freq_table is not initialized\n");
+		return;
+	}
+#endif
 	all_stat = kzalloc(sizeof(struct all_cpufreq_stats),
 			GFP_KERNEL);
 	if (!all_stat) {

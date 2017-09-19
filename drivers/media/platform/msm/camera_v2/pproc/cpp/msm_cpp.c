@@ -25,6 +25,7 @@
 #include <linux/timer.h>
 #include <linux/kernel.h>
 #include <linux/workqueue.h>
+#include <media/msm_isp.h>
 #include <media/v4l2-event.h>
 #include <media/v4l2-ioctl.h>
 #include <media/msmb_camera.h>
@@ -83,29 +84,8 @@
 	if (IS_BATCH_BUFFER_ON_PREVIEW(new_frame)) \
 		iden = swap_iden; \
 }
-
-#define SWAP_BUF_INDEX_FOR_BATCH_ON_PREVIEW(new_frame, buff_mgr_info, \
-	cur_index, swap_index) { \
-	if (IS_BATCH_BUFFER_ON_PREVIEW(new_frame)) \
-		buff_mgr_info.index = swap_index; \
-	else \
-		buff_mgr_info.index = cur_index; \
-}
-
-/*
- * Default value for get buf to be used - 0xFFFFFFFF
- * 0 is a valid index
- * no valid index from userspace, use last buffer from queue.
- */
-#define DEFAULT_OUTPUT_BUF_INDEX 0xFFFFFFFF
-#define IS_DEFAULT_OUTPUT_BUF_INDEX(index) \
-	((index == DEFAULT_OUTPUT_BUF_INDEX) ? 1 : 0)
-
-static struct msm_cpp_vbif_data cpp_vbif;
-
 static int msm_cpp_buffer_ops(struct cpp_device *cpp_dev,
-	uint32_t buff_mgr_ops, uint32_t ids, void *arg);
-
+	uint32_t buff_mgr_ops, struct msm_buf_mngr_info *buff_mgr_info);
 static int msm_cpp_send_frame_to_hardware(struct cpp_device *cpp_dev,
 	struct msm_queue_cmd *frame_qcmd);
 static int msm_cpp_send_command_to_hardware(struct cpp_device *cpp_dev,
@@ -113,9 +93,6 @@ static int msm_cpp_send_command_to_hardware(struct cpp_device *cpp_dev,
 
 static  int msm_cpp_update_gdscr_status(struct cpp_device *cpp_dev,
 	bool status);
-static int msm_cpp_buffer_private_ops(struct cpp_device *cpp_dev,
-	uint32_t buff_mgr_ops, uint32_t id, void *arg);
-
 #if CONFIG_MSM_CPP_DBG
 #define CPP_DBG(fmt, args...) pr_err(fmt, ##args)
 #else
@@ -165,26 +142,6 @@ struct msm_cpp_timer_t {
 struct msm_cpp_timer_t cpp_timer;
 static void msm_cpp_set_vbif_reg_values(struct cpp_device *cpp_dev);
 
-
-void msm_cpp_vbif_register_error_handler(void *dev,
-	enum cpp_vbif_client client,
-	int (*client_vbif_error_handler)(void *, uint32_t))
-{
-	if (dev == NULL || client >= VBIF_CLIENT_MAX) {
-		pr_err("%s: Fail to register handler! dev = %pK,client %d\n",
-			__func__, dev, client);
-		return;
-	}
-
-	if (client_vbif_error_handler != NULL) {
-		cpp_vbif.dev[client] = dev;
-		cpp_vbif.err_handler[client] = client_vbif_error_handler;
-	} else {
-		/* if handler = NULL, is unregister case */
-		cpp_vbif.dev[client] = NULL;
-		cpp_vbif.err_handler[client] = NULL;
-	}
-}
 static int msm_cpp_init_bandwidth_mgr(struct cpp_device *cpp_dev)
 {
 	int rc = 0;
@@ -844,9 +801,12 @@ static int cpp_init_hardware(struct cpp_device *cpp_dev)
 			pr_err("%s: irq request fail\n", __func__);
 			goto req_irq_fail;
 		}
-		rc = msm_cam_buf_mgr_register_ops(&cpp_dev->buf_mgr_ops);
+		cpp_dev->buf_mgr_subdev = msm_buf_mngr_get_subdev();
+
+		rc = msm_cpp_buffer_ops(cpp_dev,
+			VIDIOC_MSM_BUF_MNGR_INIT, NULL);
 		if (rc < 0) {
-			pr_err("buf mngr req ops failed\n");
+			pr_err("buf mngr init failed\n");
 			msm_camera_unregister_irq(cpp_dev->pdev,
 				cpp_dev->irq, cpp_dev);
 			goto req_irq_fail;
@@ -917,6 +877,12 @@ static void cpp_release_hardware(struct cpp_device *cpp_dev)
 {
 	int32_t rc;
 	if (cpp_dev->state != CPP_STATE_BOOT) {
+		rc = msm_cpp_buffer_ops(cpp_dev,
+			VIDIOC_MSM_BUF_MNGR_DEINIT, NULL);
+		if (rc < 0) {
+			pr_err("error in buf mngr deinit\n");
+			rc = -EINVAL;
+		}
 		msm_camera_unregister_irq(cpp_dev->pdev, cpp_dev->irq, cpp_dev);
 		tasklet_kill(&cpp_dev->cpp_tasklet);
 		atomic_set(&cpp_dev->irq_cnt, 0);
@@ -1063,32 +1029,6 @@ end:
 	return rc;
 }
 
-int cpp_vbif_error_handler(void *dev, uint32_t vbif_error)
-{
-	struct cpp_device *cpp_dev = NULL;
-
-	if (dev == NULL || vbif_error >= CPP_VBIF_ERROR_MAX) {
-		pr_err("failed: dev %pK,vbif error %d\n", dev, vbif_error);
-		return -EINVAL;
-	}
-
-	cpp_dev = (struct cpp_device *) dev;
-
-	/* MMSS_A_CPP_IRQ_STATUS_0 = 0x10 */
-	pr_err("%s: before reset halt... read MMSS_A_CPP_IRQ_STATUS_0 = 0x%x",
-		__func__, msm_camera_io_r(cpp_dev->cpp_hw_base + 0x10));
-
-	pr_err("%s: start reset bus bridge on FD + CPP!\n", __func__);
-	/* MMSS_A_CPP_RST_CMD_0 = 0x8,  firmware reset = 0x3DF77 */
-	msm_camera_io_w(0x3DF77, cpp_dev->cpp_hw_base + 0x8);
-
-	/* MMSS_A_CPP_IRQ_STATUS_0 = 0x10 */
-	pr_err("%s: after reset halt... read MMSS_A_CPP_IRQ_STATUS_0 = 0x%x",
-		__func__, msm_camera_io_r(cpp_dev->cpp_hw_base + 0x10));
-
-	return 0;
-}
-
 static int cpp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
 	int rc;
@@ -1149,10 +1089,6 @@ static int cpp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 		}
 		cpp_dev->state = CPP_STATE_IDLE;
 	}
-
-	msm_cpp_vbif_register_error_handler(cpp_dev,
-		VBIF_CLIENT_CPP, cpp_vbif_error_handler);
-
 	mutex_unlock(&cpp_dev->mutex);
 	return 0;
 }
@@ -1246,9 +1182,6 @@ static int cpp_close_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 		cpp_dev->state = CPP_STATE_OFF;
 	}
 
-	/* unregister vbif error handler */
-	msm_cpp_vbif_register_error_handler(cpp_dev,
-		VBIF_CLIENT_CPP, NULL);
 	mutex_unlock(&cpp_dev->mutex);
 	return 0;
 }
@@ -1259,28 +1192,12 @@ static const struct v4l2_subdev_internal_ops msm_cpp_internal_ops = {
 };
 
 static int msm_cpp_buffer_ops(struct cpp_device *cpp_dev,
-	uint32_t buff_mgr_ops, uint32_t ids,
-	void *arg)
+	uint32_t buff_mgr_ops, struct msm_buf_mngr_info *buff_mgr_info)
 {
 	int rc = -EINVAL;
 
-	switch (buff_mgr_ops) {
-	case VIDIOC_MSM_BUF_MNGR_IOCTL_CMD: {
-		rc = msm_cpp_buffer_private_ops(cpp_dev, buff_mgr_ops,
-			ids, arg);
-		break;
-	}
-	case VIDIOC_MSM_BUF_MNGR_PUT_BUF:
-	case VIDIOC_MSM_BUF_MNGR_BUF_DONE:
-	case VIDIOC_MSM_BUF_MNGR_GET_BUF:
-	default: {
-		struct msm_buf_mngr_info *buff_mgr_info =
-			(struct msm_buf_mngr_info *)arg;
-		rc = cpp_dev->buf_mgr_ops.msm_cam_buf_mgr_ops(buff_mgr_ops,
-			buff_mgr_info);
-		break;
-	}
-	}
+	rc = v4l2_subdev_call(cpp_dev->buf_mgr_subdev, core, ioctl,
+		buff_mgr_ops, buff_mgr_info);
 	if (rc < 0)
 		pr_debug("%s: line %d rc = %d\n", __func__, __LINE__, rc);
 	return rc;
@@ -1324,13 +1241,18 @@ static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 
 			SWAP_IDENTITY_FOR_BATCH_ON_PREVIEW(processed_frame,
 				iden, processed_frame->duplicate_identity);
+
 			memset(&buff_mgr_info, 0 ,
 				sizeof(struct msm_buf_mngr_info));
-
 			buff_mgr_info.session_id = ((iden >> 16) & 0xFFFF);
 			buff_mgr_info.stream_id = (iden & 0xFFFF);
 			buff_mgr_info.frame_id = processed_frame->frame_id;
 			buff_mgr_info.timestamp = processed_frame->timestamp;
+			/*
+			 * Update the reserved field (cds information) to buffer
+			 * manager structure so it is propogated back to HAL
+			 */
+			buff_mgr_info.reserved = processed_frame->reserved;
 			if (processed_frame->batch_info.batch_mode ==
 				BATCH_MODE_VIDEO ||
 				(IS_BATCH_BUFFER_ON_PREVIEW(
@@ -1344,7 +1266,7 @@ static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 			if (put_buf) {
 				rc = msm_cpp_buffer_ops(cpp_dev,
 					VIDIOC_MSM_BUF_MNGR_PUT_BUF,
-					0x0, &buff_mgr_info);
+					&buff_mgr_info);
 				if (rc < 0) {
 					pr_err("error putting buffer\n");
 					rc = -EINVAL;
@@ -1352,7 +1274,7 @@ static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 			} else {
 				rc = msm_cpp_buffer_ops(cpp_dev,
 					VIDIOC_MSM_BUF_MNGR_BUF_DONE,
-					0x0, &buff_mgr_info);
+					&buff_mgr_info);
 				if (rc < 0) {
 					pr_err("error putting buffer\n");
 					rc = -EINVAL;
@@ -1371,17 +1293,21 @@ static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 
 			memset(&buff_mgr_info, 0 ,
 				sizeof(struct msm_buf_mngr_info));
-
 			buff_mgr_info.session_id = ((iden >> 16) & 0xFFFF);
 			buff_mgr_info.stream_id = (iden & 0xFFFF);
 			buff_mgr_info.frame_id = processed_frame->frame_id;
 			buff_mgr_info.timestamp = processed_frame->timestamp;
 			buff_mgr_info.index =
 				processed_frame->duplicate_buffer_info.index;
+			/*
+			 * Update the reserved field (cds information) to buffer
+			 * manager structure so it is propogated back to HAL
+			 */
+			buff_mgr_info.reserved = processed_frame->reserved;
 			if (put_buf) {
 				rc = msm_cpp_buffer_ops(cpp_dev,
 					VIDIOC_MSM_BUF_MNGR_PUT_BUF,
-					0x0, &buff_mgr_info);
+					&buff_mgr_info);
 				if (rc < 0) {
 					pr_err("error putting buffer\n");
 					rc = -EINVAL;
@@ -1389,7 +1315,7 @@ static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 			} else {
 				rc = msm_cpp_buffer_ops(cpp_dev,
 					VIDIOC_MSM_BUF_MNGR_BUF_DONE,
-					0x0, &buff_mgr_info);
+					&buff_mgr_info);
 				if (rc < 0) {
 					pr_err("error putting buffer\n");
 					rc = -EINVAL;
@@ -1499,15 +1425,6 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 			__func__, __LINE__);
 		msm_cpp_set_micro_irq_mask(cpp_dev, 1, 0x8);
 		goto end;
-	}
-
-	pr_err("%s: handle vbif hang...\n", __func__);
-	for (i = 0; i < VBIF_CLIENT_MAX; i++) {
-		if (cpp_dev->vbif_data->err_handler[i] == NULL)
-			continue;
-
-		cpp_dev->vbif_data->err_handler[i](
-			cpp_dev->vbif_data->dev[i], CPP_VBIF_ERROR_HANG);
 	}
 
 	pr_debug("Reloading firmware %d\n", queue_len);
@@ -1865,6 +1782,8 @@ static int msm_cpp_check_buf_type(struct msm_buf_mngr_info *buff_mgr_info,
 			/* More or equal bufs as Input buffer */
 			num_output_bufs = new_frame->batch_info.batch_size;
 		}
+		if (num_output_bufs > MSM_OUTPUT_BUF_CNT)
+			return 0;
 		for (i = 0; i < num_output_bufs; i++) {
 			new_frame->output_buffer_info[i].index =
 				buff_mgr_info->user_buf.buf_idx[i];
@@ -2245,13 +2164,11 @@ static int msm_cpp_cfg_frame(struct cpp_device *cpp_dev,
 	struct msm_buf_mngr_info buff_mgr_info, dup_buff_mgr_info;
 	int32_t in_fd;
 	int32_t num_output_bufs = 1;
-	int32_t stripe_base = 0;
+	uint32_t stripe_base = 0;
 	uint32_t stripe_size;
 	uint8_t tnr_enabled;
 	enum msm_camera_buf_mngr_buf_type buf_type =
 		MSM_CAMERA_BUF_MNGR_BUF_PLANAR;
-	uint32_t ioctl_cmd, idx;
-	uint32_t op_index, dup_index;
 
 	stripe_base = cpp_dev->payload_params.stripe_base;
 	stripe_size = cpp_dev->payload_params.stripe_size;
@@ -2273,22 +2190,24 @@ static int msm_cpp_cfg_frame(struct cpp_device *cpp_dev,
 		pr_err("Length is not correct or frame message is missing\n");
 		return -EINVAL;
 	}
+	if (cpp_frame_msg[new_frame->msg_len - 1] !=
+		MSM_CPP_MSG_ID_TRAILER) {
+		pr_err("Invalid frame message\n");
+		return -EINVAL;
+	}
 
-	if (!new_frame->partial_frame_indicator) {
-		if (cpp_frame_msg[new_frame->msg_len - 1] !=
-			MSM_CPP_MSG_ID_TRAILER) {
-			pr_err("Invalid frame message\n");
-			return -EINVAL;
-		}
+	if (stripe_base == UINT_MAX || new_frame->num_strips >
+		(UINT_MAX - 1 - stripe_base) / stripe_size) {
+		pr_err("Invalid frame message,num_strips %d is large\n",
+			new_frame->num_strips);
+		return -EINVAL;
+	}
 
-		if ((stripe_base + new_frame->num_strips * stripe_size + 1) !=
-			new_frame->msg_len) {
-			pr_err("Invalid frame message,len=%d,expected=%d\n",
-				new_frame->msg_len,
-				(stripe_base +
-				new_frame->num_strips * stripe_size + 1));
-			return -EINVAL;
-		}
+	if ((stripe_base + new_frame->num_strips * stripe_size + 1) !=
+		new_frame->msg_len) {
+		pr_err("Invalid frame message,len=%d,expected=%d\n",
+				new_frame->msg_len,(stripe_base +new_frame->num_strips * stripe_size + 1));
+		return -EINVAL;
 	}
 
 	if (cpp_dev->iommu_state != CPP_IOMMU_STATE_ATTACHED) {
@@ -2306,12 +2225,8 @@ static int msm_cpp_cfg_frame(struct cpp_device *cpp_dev,
 		goto frame_msg_err;
 	}
 
-	op_index = new_frame->output_buffer_info[0].index;
-	dup_index = new_frame->duplicate_buffer_info.index;
-
 	if (new_frame->we_disable == 0) {
 		int32_t iden = new_frame->identity;
-
 		if ((new_frame->output_buffer_info[0].native_buff == 0) &&
 			(new_frame->first_payload)) {
 			memset(&buff_mgr_info, 0,
@@ -2324,32 +2239,16 @@ static int msm_cpp_cfg_frame(struct cpp_device *cpp_dev,
 			SWAP_IDENTITY_FOR_BATCH_ON_PREVIEW(new_frame,
 				iden, new_frame->duplicate_identity);
 
-			/*
-			 * Swap the input buffer index for batch mode with
-			 * buffer on preview
-			 */
-			SWAP_BUF_INDEX_FOR_BATCH_ON_PREVIEW(new_frame,
-				buff_mgr_info, op_index, dup_index);
-
 			buff_mgr_info.session_id = ((iden >> 16) & 0xFFFF);
 			buff_mgr_info.stream_id = (iden & 0xFFFF);
 			buff_mgr_info.type = buf_type;
-
-			if (IS_DEFAULT_OUTPUT_BUF_INDEX(buff_mgr_info.index)) {
-				ioctl_cmd = VIDIOC_MSM_BUF_MNGR_GET_BUF;
-				idx = 0x0;
-			} else {
-				ioctl_cmd = VIDIOC_MSM_BUF_MNGR_IOCTL_CMD;
-				idx =
-				MSM_CAMERA_BUF_MNGR_IOCTL_ID_GET_BUF_BY_IDX;
-			}
 			rc = msm_cpp_buffer_ops(cpp_dev,
-				ioctl_cmd, idx, &buff_mgr_info);
+				VIDIOC_MSM_BUF_MNGR_GET_BUF,
+				&buff_mgr_info);
 			if (rc < 0) {
 				rc = -EAGAIN;
-				pr_debug("%s:get_buf err rc:%d, index %d\n",
-					__func__, rc,
-					new_frame->output_buffer_info[0].index);
+				pr_debug("%s: error getting buffer rc:%d\n",
+					__func__, rc);
 				goto frame_msg_err;
 			}
 			num_output_bufs =
@@ -2387,32 +2286,16 @@ static int msm_cpp_cfg_frame(struct cpp_device *cpp_dev,
 			iden, new_frame->identity);
 
 		memset(&dup_buff_mgr_info, 0, sizeof(struct msm_buf_mngr_info));
-
-		/*
-		 * Swap the input buffer index for batch mode with
-		 * buffer on preview
-		 */
-		SWAP_BUF_INDEX_FOR_BATCH_ON_PREVIEW(new_frame,
-			dup_buff_mgr_info, dup_index, op_index);
-
 		dup_buff_mgr_info.session_id = ((iden >> 16) & 0xFFFF);
 		dup_buff_mgr_info.stream_id = (iden & 0xFFFF);
 		dup_buff_mgr_info.type =
 			MSM_CAMERA_BUF_MNGR_BUF_PLANAR;
-		if (IS_DEFAULT_OUTPUT_BUF_INDEX(dup_buff_mgr_info.index)) {
-			ioctl_cmd = VIDIOC_MSM_BUF_MNGR_GET_BUF;
-			idx = 0x0;
-		} else {
-			ioctl_cmd = VIDIOC_MSM_BUF_MNGR_IOCTL_CMD;
-			idx = MSM_CAMERA_BUF_MNGR_IOCTL_ID_GET_BUF_BY_IDX;
-		}
-		rc = msm_cpp_buffer_ops(cpp_dev, ioctl_cmd, idx,
+		rc = msm_cpp_buffer_ops(cpp_dev, VIDIOC_MSM_BUF_MNGR_GET_BUF,
 			&dup_buff_mgr_info);
 		if (rc < 0) {
 			rc = -EAGAIN;
-			pr_debug("%s: get_buf err rc:%d,  index %d\n",
-				__func__, rc,
-				new_frame->duplicate_buffer_info.index);
+			pr_debug("%s: error getting buffer rc:%d\n",
+				__func__, rc);
 			goto phyaddr_err;
 		}
 		new_frame->duplicate_buffer_info.index =
@@ -2426,7 +2309,7 @@ static int msm_cpp_cfg_frame(struct cpp_device *cpp_dev,
 			pr_err("error gettting output physical address\n");
 			rc = -EINVAL;
 			msm_cpp_buffer_ops(cpp_dev, VIDIOC_MSM_BUF_MNGR_PUT_BUF,
-				0x0, &dup_buff_mgr_info);
+				&dup_buff_mgr_info);
 			goto phyaddr_err;
 		}
 		/* set duplicate enable bit */
@@ -2504,7 +2387,7 @@ qcmd_err:
 phyaddr_err:
 	if (new_frame->output_buffer_info[0].native_buff == 0)
 		msm_cpp_buffer_ops(cpp_dev, VIDIOC_MSM_BUF_MNGR_PUT_BUF,
-			0x0, &buff_mgr_info);
+			&buff_mgr_info);
 frame_msg_err:
 	kfree(cpp_frame_msg);
 	kfree(new_frame);
@@ -2673,19 +2556,17 @@ static int msm_cpp_validate_input(unsigned int cmd, void *arg,
 {
 	switch (cmd) {
 	case MSM_SD_SHUTDOWN:
-	case MSM_SD_NOTIFY_FREEZE:
-	case MSM_SD_UNNOTIFY_FREEZE:
 		break;
 	default: {
 		if (ioctl_ptr == NULL) {
-			pr_err("Wrong ioctl_ptr %pK\n", ioctl_ptr);
+			pr_err("Wrong ioctl_ptr for cmd %u\n", cmd);
 			return -EINVAL;
 		}
 
 		*ioctl_ptr = arg;
 		if ((*ioctl_ptr == NULL) ||
-			((*ioctl_ptr)->ioctl_ptr == NULL)) {
-			pr_err("Wrong arg %pK\n", arg);
+			(*ioctl_ptr)->ioctl_ptr == NULL) {
+			pr_err("Error invalid ioctl argument cmd %u\n", cmd);
 			return -EINVAL;
 		}
 		break;
@@ -2708,6 +2589,10 @@ long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 	cpp_dev = v4l2_get_subdevdata(sd);
 	if (cpp_dev == NULL) {
 		pr_err("cpp_dev is null\n");
+		return -EINVAL;
+	}
+	if (_IOC_DIR(cmd) == _IOC_NONE) {
+		pr_err("Invalid ioctl/subdev cmd %u", cmd);
 		return -EINVAL;
 	}
 	rc = msm_cpp_validate_input(cmd, arg, &ioctl_ptr);
@@ -3115,11 +3000,11 @@ STREAM_BUFF_END:
 		if (queue_buf_info.is_buf_dirty) {
 			rc = msm_cpp_buffer_ops(cpp_dev,
 				VIDIOC_MSM_BUF_MNGR_PUT_BUF,
-				0x0, &queue_buf_info.buff_mgr_info);
+				&queue_buf_info.buff_mgr_info);
 		} else {
 			rc = msm_cpp_buffer_ops(cpp_dev,
 				VIDIOC_MSM_BUF_MNGR_BUF_DONE,
-				0x0, &queue_buf_info.buff_mgr_info);
+				&queue_buf_info.buff_mgr_info);
 		}
 		if (rc < 0) {
 			pr_err("error in buf done\n");
@@ -3131,7 +3016,6 @@ STREAM_BUFF_END:
 	case VIDIOC_MSM_CPP_POP_STREAM_BUFFER: {
 		struct msm_buf_mngr_info buff_mgr_info;
 		struct msm_cpp_frame_info_t frame_info;
-		uint32_t ioctl_cmd, idx;
 		if (ioctl_ptr->ioctl_ptr == NULL ||
 			(ioctl_ptr->len !=
 			sizeof(struct msm_cpp_frame_info_t))) {
@@ -3151,25 +3035,16 @@ STREAM_BUFF_END:
 		buff_mgr_info.stream_id = (frame_info.identity & 0xFFFF);
 		buff_mgr_info.type =
 			MSM_CAMERA_BUF_MNGR_BUF_PLANAR;
-		if (IS_DEFAULT_OUTPUT_BUF_INDEX(
-			frame_info.output_buffer_info[0].index)) {
-			ioctl_cmd = VIDIOC_MSM_BUF_MNGR_GET_BUF;
-			idx = 0x0;
-		} else {
-			ioctl_cmd = VIDIOC_MSM_BUF_MNGR_IOCTL_CMD;
-			idx = MSM_CAMERA_BUF_MNGR_IOCTL_ID_GET_BUF_BY_IDX;
-		}
-		rc = msm_cpp_buffer_ops(cpp_dev, ioctl_cmd, idx,
+		rc = msm_cpp_buffer_ops(cpp_dev, VIDIOC_MSM_BUF_MNGR_GET_BUF,
 			&buff_mgr_info);
 		if (rc < 0) {
 			rc = -EAGAIN;
-			pr_err_ratelimited("POP: get_buf err rc:%d, index %d\n",
-				rc, frame_info.output_buffer_info[0].index);
+			pr_err_ratelimited("error getting buffer rc:%d\n", rc);
 			break;
 		}
 		buff_mgr_info.frame_id = frame_info.frame_id;
 		rc = msm_cpp_buffer_ops(cpp_dev, VIDIOC_MSM_BUF_MNGR_BUF_DONE,
-			0x0, &buff_mgr_info);
+			&buff_mgr_info);
 		if (rc < 0) {
 			pr_err("error in buf done\n");
 			rc = -EAGAIN;
@@ -3251,8 +3126,7 @@ static long msm_cpp_subdev_do_ioctl(
 	struct v4l2_fh *vfh = NULL;
 
 	if ((arg == NULL) || (file == NULL)) {
-		pr_err("Invalid input parameters arg %pK, file %pK\n",
-			arg, file);
+		pr_err("Invalid input parameters arg %pK, file %pK\n", arg, file);
 		return -EINVAL;
 	}
 	vdev = video_devdata(file);
@@ -3392,6 +3266,7 @@ static struct msm_cpp_frame_info_t *get_64bit_cpp_frame_from_compat(
 	new_frame->we_disable = new_frame32->we_disable;
 	new_frame->duplicate_identity = new_frame32->duplicate_identity;
 	new_frame->feature_mask = new_frame32->feature_mask;
+	new_frame->reserved = new_frame32->reserved;
 	new_frame->partial_frame_indicator =
 		new_frame32->partial_frame_indicator;
 	new_frame->first_payload = new_frame32->first_payload;
@@ -3491,6 +3366,7 @@ static void get_compat_frame_from_64bit(struct msm_cpp_frame_info_t *frame,
 	k32_frame->we_disable = frame->we_disable;
 	k32_frame->duplicate_identity = frame->duplicate_identity;
 	k32_frame->feature_mask = frame->feature_mask;
+	k32_frame->reserved = frame->reserved;
 	k32_frame->cookie = ptr_to_compat(frame->cookie);
 	k32_frame->partial_frame_indicator = frame->partial_frame_indicator;
 	k32_frame->first_payload = frame->first_payload;
@@ -3791,6 +3667,13 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 		get_user(k_queue_buf.buff_mgr_info.timestamp.tv_usec,
 			&u32_queue_buf->buff_mgr_info.timestamp.tv_usec);
 
+		/*
+		 * Update the reserved field (cds information) to buffer
+		 * manager structure so that it is propogated back to HAL
+		 */
+		get_user(k_queue_buf.buff_mgr_info.reserved,
+			&u32_queue_buf->buff_mgr_info.reserved);
+
 		kp_ioctl.ioctl_ptr = (void *)&k_queue_buf;
 		kp_ioctl.len = sizeof(struct msm_pproc_queue_buf_info);
 		cmd = VIDIOC_MSM_CPP_QUEUE_BUF;
@@ -3953,43 +3836,6 @@ static void msm_cpp_set_vbif_reg_values(struct cpp_device *cpp_dev)
 	}
 }
 
-static int msm_cpp_buffer_private_ops(struct cpp_device *cpp_dev,
-	uint32_t buff_mgr_ops, uint32_t id, void *arg) {
-
-	int32_t rc = 0;
-
-	switch (id) {
-	case MSM_CAMERA_BUF_MNGR_IOCTL_ID_GET_BUF_BY_IDX: {
-		struct msm_camera_private_ioctl_arg ioctl_arg;
-		struct msm_buf_mngr_info *buff_mgr_info =
-			(struct msm_buf_mngr_info *)arg;
-
-		ioctl_arg.id = MSM_CAMERA_BUF_MNGR_IOCTL_ID_GET_BUF_BY_IDX;
-		ioctl_arg.size = sizeof(struct msm_buf_mngr_info);
-		ioctl_arg.result = 0;
-		ioctl_arg.reserved = 0x0;
-		ioctl_arg.ioctl_ptr = 0x0;
-		MSM_CAM_GET_IOCTL_ARG_PTR(&ioctl_arg.ioctl_ptr, &buff_mgr_info,
-			sizeof(void *));
-		rc = cpp_dev->buf_mgr_ops.msm_cam_buf_mgr_ops(buff_mgr_ops,
-			&ioctl_arg);
-		/* Use VIDIOC_MSM_BUF_MNGR_GET_BUF if getbuf with indx fails */
-		if (rc < 0) {
-			pr_err_ratelimited("get_buf_by_idx for %d err %d,use get_buf\n",
-				buff_mgr_info->index, rc);
-			rc = cpp_dev->buf_mgr_ops.msm_cam_buf_mgr_ops(
-				VIDIOC_MSM_BUF_MNGR_GET_BUF, buff_mgr_info);
-		}
-		break;
-	}
-	default: {
-		pr_err("unsupported buffer manager ioctl\n");
-		break;
-	}
-	}
-	return rc;
-}
-
 static int cpp_probe(struct platform_device *pdev)
 {
 	struct cpp_device *cpp_dev;
@@ -4015,8 +3861,6 @@ static int cpp_probe(struct platform_device *pdev)
 	spin_lock_init(&cpp_timer.data.processed_frame_lock);
 
 	cpp_dev->pdev = pdev;
-	memset(&cpp_vbif, 0, sizeof(struct msm_cpp_vbif_data));
-	cpp_dev->vbif_data = &cpp_vbif;
 
 	cpp_dev->camss_cpp_base =
 		msm_camera_get_reg_base(pdev, "camss_cpp", true);
@@ -4080,7 +3924,7 @@ static int cpp_probe(struct platform_device *pdev)
 	if (cpp_dev->bus_master_flag)
 		rc = msm_cpp_init_bandwidth_mgr(cpp_dev);
 	else
-		rc = msm_isp_init_bandwidth_mgr(NULL, ISP_CPP);
+		rc = msm_isp_init_bandwidth_mgr(ISP_CPP);
 	if (rc < 0) {
 		pr_err("%s: Bandwidth registration Failed!\n", __func__);
 		goto cpp_probe_init_error;

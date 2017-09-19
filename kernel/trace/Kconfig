@@ -643,5 +643,11 @@ config RING_BUFFER_STARTUP_TEST
 
 endif # FTRACE
 
+config KERNEL_ATRACE
+	bool "Enable Kernel Atrace"
+	depends on TRACING
+	help
+	 Enable Atrace in Kernel (added by samsung)	 
+
 endif # TRACING_SUPPORT
 

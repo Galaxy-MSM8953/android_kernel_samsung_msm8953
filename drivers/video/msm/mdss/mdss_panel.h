@@ -110,6 +110,9 @@ enum {
 	MDSS_PANEL_BLANK_BLANK = 0,
 	MDSS_PANEL_BLANK_UNBLANK,
 	MDSS_PANEL_BLANK_LOW_POWER,
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	MDSS_PANEL_BLANK_READY_TO_UNBLANK,
+#endif
 };
 
 enum {
@@ -260,6 +263,14 @@ enum mdss_intf_events {
 	MDSS_EVENT_DSI_RECONFIG_CMD,
 	MDSS_EVENT_DSI_RESET_WRITE_PTR,
 	MDSS_EVENT_PANEL_TIMING_SWITCH,
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	MDSS_SAMSUNG_EVENT_START,
+	MDSS_SAMSUNG_EVENT_FRAME_UPDATE,
+	MDSS_SAMSUNG_EVENT_FB_EVENT_CALLBACK,
+	MDSS_SAMSUNG_EVENT_PANEL_ESD_RECOVERY,
+	MDSS_SAMSUNG_EVENT_MULTI_RESOLUTION,
+	MDSS_SAMSUNG_EVENT_MAX,
+#endif
 	MDSS_EVENT_MAX,
 };
 
@@ -649,6 +660,7 @@ struct mdss_panel_info {
 	u32 partial_update_roi_merge;
 	struct ion_handle *splash_ihdl;
 	int panel_power_state;
+	int blank_state;
 	int compression_mode;
 
 	uint32_t panel_dead;
@@ -721,6 +733,9 @@ struct mdss_panel_info {
 
 	/* debugfs structure for the panel */
 	struct mdss_panel_debugfs_info *debugfs_info;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	int panel_state;
+#endif
 };
 
 struct mdss_panel_timing {
@@ -784,6 +799,9 @@ struct mdss_panel_data {
 	/* To store dsc cfg name passed by bootloader */
 	char dsc_cfg_np_name[MDSS_MAX_PANEL_LEN];
 	struct mdss_panel_data *next;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	void *panel_private;
+#endif
 };
 
 struct mdss_panel_debugfs_info {

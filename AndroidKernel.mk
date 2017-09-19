@@ -6,6 +6,17 @@ ifeq ($(KERNEL_TARGET),)
 INSTALLED_KERNEL_TARGET := $(PRODUCT_OUT)/kernel
 endif
 
+# Samsung specific Kconfig
+ifeq ( ,$(findstring VARIANT_DEFCONFIG, $(KERNEL_DEFCONFIG)))
+KERNEL_DEFCONFIG += VARIANT_DEFCONFIG=$(VARIANT_DEFCONFIG) \
+		DEBUG_DEFCONFIG=$(DEBUG_DEFCONFIG) \
+		SELINUX_DEFCONFIG=$(SELINUX_DEFCONFIG) \
+		SELINUX_LOG_DEFCONFIG=$(SELINUX_LOG_DEFCONFIG) \
+		TIMA_DEFCONFIG=$(TIMA_DEFCONFIG) \
+		DMVERITY_DEFCONFIG=$(DMVERITY_DEFCONFIG) \
+		KASLR_DEFCONFIG=$(KASLR_DEFCONFIG)
+endif
+
 TARGET_KERNEL_ARCH := $(strip $(TARGET_KERNEL_ARCH))
 ifeq ($(TARGET_KERNEL_ARCH),)
 KERNEL_ARCH := arm
@@ -120,6 +131,17 @@ $(KERNEL_USR): $(KERNEL_HEADERS_INSTALL)
 $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_USR)
 endif
 
+#Tweak defconfig for FACTORY KERNEL without additional fac_defcofig
+define modi-facdefconfig64
+chmod 664 kernel/arch/arm64/configs/$(VARIANT_DEFCONFIG)
+echo -e "\nCONFIG_SEC_FACTORY=y" >> kernel/arch/arm64/configs/$(VARIANT_DEFCONFIG)
+endef
+
+define modi-facdefconfig
+chmod 664 kernel/arch/arm/configs/$(VARIANT_DEFCONFIG)
+echo -e "\nCONFIG_SEC_FACTORY=y" >> kernel/arch/arm/configs/$(VARIANT_DEFCONFIG)
+endef
+
 $(KERNEL_OUT):
 	mkdir -p $(KERNEL_OUT)
 
@@ -140,6 +162,13 @@ $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_HEADERS_INSTALL)
 	$(clean-module-folder)
 
 $(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT)
+ifeq ($(SEC_FACTORY_BUILD), true)
+ifeq ($(KERNEL_ARCH),arm64)
+	$(modi-facdefconfig64)
+else
+	$(modi-facdefconfig)
+endif
+endif
 	$(hide) if [ ! -z "$(KERNEL_HEADER_DEFCONFIG)" ]; then \
 			rm -f $(BUILD_ROOT_LOC)$(KERNEL_CONFIG); \
 			$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) ARCH=$(KERNEL_HEADER_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(KERNEL_HEADER_DEFCONFIG); \

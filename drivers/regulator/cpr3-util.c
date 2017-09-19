@@ -1087,6 +1087,13 @@ static int cpr3_panic_notifier_init(struct cpr3_controller *ctrl)
 				rc);
 			return rc;
 		}
+		regs[i].virt_addr = devm_ioremap(ctrl->dev, regs[i].addr, 0x4);
+		if (!regs[i].virt_addr) {
+			pr_err("Unable to map panic register addr 0x%08x\n",
+				regs[i].addr);
+			return -EINVAL;
+		}
+
 		regs[i].value = 0xFFFFFFFF;
 	}
 
@@ -1382,7 +1389,7 @@ void cpr3_print_quots(struct cpr3_regulator *vreg)
 		for (j = 0, pos = 0; j < CPR3_RO_COUNT; j++)
 			pos += scnprintf(buf + pos, buflen - pos, " %u",
 				vreg->corner[i].target_quot[j]);
-		cpr3_debug(vreg, "target quots[%2d]:%s\n", i, buf);
+		cpr3_info(vreg, "target quots[%2d]:%s\n", i, buf);
 	}
 
 	kfree(buf);

@@ -50,6 +50,12 @@
 #include "sd_ops.h"
 #include "sdio_ops.h"
 
+#ifdef CONFIG_MMC_SUPPORT_STLOG
+#include <linux/stlog.h>
+#else
+#define ST_LOG(fmt,...)
+#endif
+
 /* If the device is not responding */
 #define MMC_CORE_TIMEOUT_MS	(10 * 60 * 1000) /* 10 minute timeout */
 
@@ -1168,7 +1174,7 @@ int mmc_set_auto_bkops(struct mmc_card *card, bool enable)
 			mmc_update_bkops_auto_off(&card->bkops.stats);
 		}
 		card->ext_csd.bkops_en = bkops_en;
-		pr_debug("%s: %s: bkops state %x\n",
+		pr_info("%s: %s: bkops state %x\n",
 				mmc_hostname(card->host), __func__, bkops_en);
 	}
 out:
@@ -3717,6 +3723,7 @@ int _mmc_detect_card_removed(struct mmc_host *host)
 	if (ret) {
 		mmc_card_set_removed(host->card);
 		pr_debug("%s: card remove detected\n", mmc_hostname(host));
+		ST_LOG("<%s> %s: card remove detected\n", __func__,mmc_hostname(host));
 	}
 
 	return ret;
@@ -3810,7 +3817,7 @@ void mmc_rescan(struct work_struct *work)
 	 * release the lock here.
 	 */
 	mmc_bus_put(host);
-
+#ifndef	CONFIG_NO_DETECT_PIN
 	if (!(host->caps & MMC_CAP_NONREMOVABLE) && host->ops->get_cd &&
 			host->ops->get_cd(host) == 0) {
 		mmc_claim_host(host);
@@ -3818,7 +3825,9 @@ void mmc_rescan(struct work_struct *work)
 		mmc_release_host(host);
 		goto out;
 	}
+#endif
 
+	ST_LOG("<%s> %s: card remove detected\n", __func__,mmc_hostname(host));
 	mmc_claim_host(host);
 	(void) mmc_rescan_try_freq(host, host->f_min);
 	mmc_release_host(host);

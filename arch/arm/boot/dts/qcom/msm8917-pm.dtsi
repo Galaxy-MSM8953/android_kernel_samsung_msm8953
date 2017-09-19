@@ -181,6 +181,7 @@
 			<0xff 126>, /* smmu_bus_intr[39] */
 			<0xff 128>, /* blsp1_peripheral_irq[3] */
 			<0xff 129>, /* blsp1_peripheral_irq[4] */
+			<0xff 130>, /* rotate sensor */
 			<0xff 131>, /* qup_irq */
 			<0xff 136>, /* smmu_bus_intr[43] */
 			<0xff 137>, /* smmu_intr_bus[44] */
@@ -254,7 +255,8 @@
 			<0xff 322>, /* q6ss_irq_out(5) */
 			<0xff 323>, /* q6ss_irq_out(6) */
 			<0xff 325>, /* q6ss_wdog_exp_irq */
-			<0xff 344>; /* sdcc1ice */
+			<0xff 344>, /* sdcc1ice */
+			<0xff 351>; /* trustonic */
 
 		qcom,gpio-parent = <&tlmm>;
 		qcom,gpio-map = <3  38 >,

@@ -542,6 +542,68 @@ config LEDS_AW2013
 	  This option enables support for the AW2013 RGB LED connected
 	  through I2C. Say Y to enable support for the AW2013 LED.
 
+config FLASHLIGHT
+	bool "Flashlight Support"
+	help
+	  This option enables the led sysfs class in /sys/class/flashlight.
+
+config SM_FLASH_LED
+	tristate "Siliconmitus flash LED driver support"
+	depends on FLASHLIGHT
+	help
+	  Say Y here to enable Siliconmitus's flash LED driver HAL architecture
+
+config FLED_SM5703
+	tristate "Siliconmitus SM5703 flash LED driver"
+	help
+	  A driver for Siliconmitus SM5703 flash LED
+
+config LEDS_SM5705
+	tristate "Siliconmitus SM5703 flash LED driver"
+	help
+	  A driver for Siliconmitus SM5705 flash LED
+
+config LEDS_SM5705_RGB
+	tristate "LED driver for SM5705 LED"
+	  help
+	  This option enables support for RGB LED driver
+	  accessed via the I2C bus.
+	  SM5705 is a fully programmable, constant current
+	  three channel LED driver with flexible control interface.
+
+config DUAL_LEDS_FLASH
+	tristate "Dual leds flash driver for main camera"
+	help
+	  A driver for dual LEDs flash
+	  This option enables support for the dual LEDs on the SM5705.
+
+config LEDS_SEPARATE_PREFLASH
+	tristate "Seperate preflash current for main camera"
+	help
+	  Option for seperate preflash current on SM5705.
+
+config LEDS_S2MU005
+	tristate "S2MU005 flash LED driver"
+	help
+	  A driver for S2MU005 flash LED
+	  This option enables support for the LEDs on the S2MU005.
+
+config LEDS_KTD2026
+	tristate "LED driver for KTD2026 LED"
+	depends on I2C
+	  help
+	  This option enables support for RGB LED driver
+	  accessed via the I2C bus.
+	  KTD2026 is a fully programmable, constant current
+	  three channel LED driver with flexible control interface.
+
+config ACTIVE_FLASH
+	tristate "set Active Flash attribute"
+	help
+	  A driver for Active Flash
+	  This option enables support for the Active Flash.	  
+
+
 comment "LED Triggers"
 source "drivers/leds/trigger/Kconfig"
 

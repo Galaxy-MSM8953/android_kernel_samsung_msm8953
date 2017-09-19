@@ -29,6 +29,11 @@
 #include <linux/of.h>
 #include <trace/events/power.h>
 
+#ifdef CONFIG_CPU_FREQ_LIMIT
+/* cpu frequency table for limit driver */
+void cpufreq_limit_set_table(int cpu, struct cpufreq_frequency_table * ftbl);
+#endif
+
 static DEFINE_MUTEX(l2bw_lock);
 
 static struct clk *cpu_clk[NR_CPUS];
@@ -374,6 +379,10 @@ static struct cpufreq_frequency_table *cpufreq_parse_dt(struct device *dev,
 
 	ftbl[i].driver_data = i;
 	ftbl[i].frequency = CPUFREQ_TABLE_END;
+
+#ifdef CONFIG_CPU_FREQ_LIMIT
+	cpufreq_limit_set_table(cpu, ftbl);
+#endif
 
 	devm_kfree(dev, data);
 

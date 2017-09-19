@@ -1149,6 +1149,18 @@ static void mmc_sd_detect(struct mmc_host *host)
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
+#if	defined(CONFIG_SEC_HYBRID_TRAY)
+	if (host->ops->get_cd && host->ops->get_cd(host) == 0) {
+		mmc_card_set_removed(host->card);
+		mmc_claim_host(host);
+		mmc_power_off(host);
+		mmc_sd_remove(host);
+		mmc_detach_bus(host);
+		mmc_release_host(host);
+		return;
+	}
+#endif
+
 	mmc_get_card(host->card);
 
 	/*

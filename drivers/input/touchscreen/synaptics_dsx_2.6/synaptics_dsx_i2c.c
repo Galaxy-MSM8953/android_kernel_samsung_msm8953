@@ -45,12 +45,10 @@
 
 #define SYN_I2C_RETRY_TIMES 10
 
-/*
+
 #define I2C_BURST_LIMIT 255
-*/
-/*
-#define XFER_MSGS_LIMIT 8
-*/
+#define XFER_MSGS_LIMIT 1
+
 
 static unsigned char *wr_buf;
 
@@ -248,6 +246,25 @@ static int parse_dt(struct device *dev, struct synaptics_dsx_board_data *bdata)
 		bdata->vir_button_map->map = NULL;
 	}
 
+	retval = of_property_read_string(np, "synaptics,firmware-name", &name);
+	if (retval < 0)
+		bdata->firmware_name = NULL;
+	else 
+		bdata->firmware_name = name;
+
+	retval = of_property_read_string(np, "synaptics,firmware-name-bl", &name);
+	if (retval < 0)
+		bdata->firmware_name_bl = NULL;
+	else 
+		bdata->firmware_name_bl = name;
+
+#ifdef CONFIG_SEC_INCELL
+	retval = of_property_read_u32(np, "synaptics,lcd-id", &value);
+	if (retval < 0)
+		bdata->lcd_id = 0;
+	else
+		bdata->lcd_id = value;
+#endif
 	return 0;
 }
 #endif
@@ -576,6 +593,10 @@ static void synaptics_rmi4_i2c_dev_release(struct device *dev)
 	return;
 }
 
+#ifdef CONFIG_FB_MSM_MDSS_SAMSUNG
+extern int get_lcd_attached(char *mode);
+#endif
+
 static int synaptics_rmi4_i2c_probe(struct i2c_client *client,
 		const struct i2c_device_id *dev_id)
 {
@@ -643,6 +664,20 @@ static int synaptics_rmi4_i2c_probe(struct i2c_client *client,
 	synaptics_dsx_i2c_device->dev.parent = &client->dev;
 	synaptics_dsx_i2c_device->dev.platform_data = &hw_if;
 	synaptics_dsx_i2c_device->dev.release = synaptics_rmi4_i2c_dev_release;
+
+#ifdef CONFIG_FB_MSM_MDSS_SAMSUNG
+	{
+		unsigned lcd_id = get_lcd_attached("GET");
+
+		/* when lcd moudle was taken off, lcd id is received 0xFFFFFF */
+		if (lcd_id == 0xFFFFFF) {
+			dev_err(&client->dev,
+					"%s: LCD module was taken off\n",
+					__func__);
+			return -ENODEV;
+		}
+	}
+#endif
 
 	retval = platform_device_register(synaptics_dsx_i2c_device);
 	if (retval) {

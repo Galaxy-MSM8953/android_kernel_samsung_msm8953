@@ -56,6 +56,8 @@
 
 #include "timekeeping.h"
 
+#include <linux/sec_debug.h>
+
 /*
  * The timer bases:
  *
@@ -1217,7 +1219,9 @@ static void __run_hrtimer(struct hrtimer *timer, ktime_t *now)
 	 */
 	raw_spin_unlock(&cpu_base->lock);
 	trace_hrtimer_expire_entry(timer, now);
+	secdbg_msg("hrtimer %pS entry", fn);
 	restart = fn(timer);
+	secdbg_msg("hrtimer %pS exit", fn);
 	trace_hrtimer_expire_exit(timer);
 	raw_spin_lock(&cpu_base->lock);
 

@@ -827,14 +827,14 @@ static void ipa_rx_switch_to_intr_mode(struct ipa_sys_context *sys)
 		goto fail;
 	}
 
-	if (!atomic_read(&sys->curr_polling_state) &&
+	if (!atomic_read(&sys->curr_polling_state) && 
 		((sys->ep->connect.options & SPS_O_EOT) == SPS_O_EOT)) {
 		IPADBG("already in intr mode\n");
 		return;
 	}
 
 	if (!atomic_read(&sys->curr_polling_state)) {
-		IPAERR("already in intr mode\n");
+		IPAERR("Not in poll mode, and IRQ not enabled.\n");
 		goto fail;
 	}
 
@@ -2248,6 +2248,7 @@ static int ipa_lan_rx_pyld_hdlr(struct sk_buff *skb,
 	unsigned int used = *(unsigned int *)skb->cb;
 	unsigned int used_align = ALIGN(used, 32);
 	unsigned long unused = IPA_GENERIC_RX_BUFF_BASE_SZ - used;
+	u32 skb2_len;
 
 	IPA_DUMP_BUFF(skb->data, 0, skb->len);
 
@@ -2428,8 +2429,9 @@ begin:
 				sys->drop_packet = true;
 			}
 
-			skb2 = ipa_skb_copy_for_client(skb,
-				status->pkt_len + IPA_PKT_STATUS_SIZE);
+			skb2_len = status->pkt_len + IPA_PKT_STATUS_SIZE; 
+			skb2_len = min(skb2_len, skb->len); 
+			skb2 = ipa_skb_copy_for_client(skb, skb2_len); 
 			if (likely(skb2)) {
 				if (skb->len < len + IPA_PKT_STATUS_SIZE) {
 					IPADBG("SPL skb len %d len %d\n",

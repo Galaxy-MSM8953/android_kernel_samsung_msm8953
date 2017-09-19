@@ -2,18 +2,85 @@
 # Near Field Communication (NFC) devices
 #
 
-menu "Near Field Communication (NFC) devices"
-	depends on NFC
-
-config NFC_PN533
-	tristate "NXP PN533 USB driver"
-	depends on USB
+config SAMSUNG_NFC
+	bool "Samsung NFC driver"
+	default n
 	help
-	  NXP PN533 USB driver.
-	  This driver provides support for NFC NXP PN533 devices.
+	  Say Y here if you want to build support for NFC (Near field
+	  communication) devices.
+	  To compile this support as a module, choose M here: the module will
+	  be called nfc.
 
-	  Say Y here to compile support for PN533 devices into the
-	  kernel or say M to compile it as module (pn533).
+config SEC_NFC
+        bool "Samsung NFC driver"
+        default n
+        help
+          SAMSUNG NFC Driver.
+          This driver provides support for SAMSUNG NFC products.
+          You should select your NFC product and interface.
+
+          Say Y here to compile support for SAMSUNG NFC driver into the
+          kernel.
+
+config ESE_P3
+        bool "Oberthur ese driver"
+		depends on SPI
+		default n
+		help
+		  Oberthur Driver.
+		  This driver provides support for LSI NXP combined ESE products.
+		  You should select your NFC product and interface.
+
+config ESE_SECURE
+        bool "Secured eSE driver"
+        default n
+        help
+          Secured eSE SPI Driver.
+
+config ESE_SPI_GPIO_START
+        int "Qcom ese start num"
+        default 0
+        help
+          eSE SPI Driver.
+
+config ESE_SPI_GPIO_END
+        int "Qcom ese end num"
+        default 0
+        help
+          eSE SPI Driver.
+
+config ESE_SECURE_SPI_PORT
+        int "Qcom ese bus num"
+        default 0
+        help
+          eSE SPI Driver.
+
+config NFC_PN547 
+	bool "NXP PN547 Controller"
+	default n
+	help
+	  NXP PN547 Near Field Communication controller support.
+	  This option enables device driver support for the NFC.
+	  It is used by many services. NFC is fully controlled using I2C
+	  to communicate the AP chip.
+
+config NFC_PN547_ESE_SUPPORT 
+	bool "NXP eSE Controller"
+	default n
+	help
+	  NXP PN547 Near Field Communication controller support.
+	  This option enables device driver support for the NFC.
+	  It is used by many services. NFC is fully controlled using I2C
+	  to communicate the AP chip.
+
+config NFC_PM_BBCLK2 
+	bool "NXP clock Controller"
+	default n
+	help
+	  NXP PN547 Near Field Communication controller support.
+	  This option enables device driver support for the NFC.
+	  It is used by many services. NFC is fully controlled using I2C
+	  to communicate the AP chip.
 
 config NFC_WILINK
 	tristate "Texas Instruments NFC WiLink driver"
@@ -67,13 +134,6 @@ config NFC_PORT100
 	  RC-S380 dongle.
 
 	  If unsure, say N.
-
-source "drivers/nfc/pn544/Kconfig"
-source "drivers/nfc/microread/Kconfig"
-source "drivers/nfc/nfcmrvl/Kconfig"
-source "drivers/nfc/st21nfca/Kconfig"
-source "drivers/nfc/st21nfcb/Kconfig"
-endmenu
 
 config NFC_NQ
 	tristate "Qualcomm NCI based NFC Controller Driver for NQx"

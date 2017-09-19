@@ -24,6 +24,15 @@
 
 #include <soc/qcom/scm.h>
 
+#include <linux/thread_info.h>
+#include <linux/sched.h>
+#include <linux/string.h>
+#if defined(CONFIG_ARCH_MSM8953)
+#include <linux/smp.h>
+#endif
+
+#include <linux/sec_debug.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/scm.h>
 
@@ -56,9 +65,17 @@ DEFINE_MUTEX(scm_lmh_lock);
 #define SMC_ATOMIC_MASK 0x80000000
 #define IS_CALL_AVAIL_CMD 1
 
-#define SCM_BUF_LEN(__cmd_size, __resp_size)	\
-	(sizeof(struct scm_command) + sizeof(struct scm_response) + \
-		__cmd_size + __resp_size)
+#define SCM_BUF_LEN(__cmd_size, __resp_size) ({ \
+		size_t x = __cmd_size + __resp_size; \
+		size_t y = sizeof(struct scm_command) + sizeof(struct scm_response); \
+		size_t result; \
+		if (x < __cmd_size || (x + y) < x) \
+			result = 0; \
+		else \
+			result = x + y; \
+		result; \
+		})
+
 /**
  * struct scm_command - one SCM command buffer
  * @len: total available memory for command and response
@@ -209,6 +226,13 @@ static u32 smc(u32 cmd_addr)
 	return r0;
 }
 
+#if defined(CONFIG_ARCH_MSM8953)
+static void __wrap_flush_cache_all(void* vp)
+{
+	flush_cache_all();
+}
+#endif
+
 static int __scm_call(const struct scm_command *cmd)
 {
 	int ret;
@@ -357,8 +381,7 @@ int scm_call_noalloc(u32 svc_id, u32 cmd_id, const void *cmd_buf,
 	int ret;
 	size_t len = SCM_BUF_LEN(cmd_len, resp_len);
 
-	if (cmd_len > scm_buf_len || resp_len > scm_buf_len ||
-	    len > scm_buf_len)
+	if (len == 0)
 		return -EINVAL;
 
 	if (!IS_ALIGNED((unsigned long)scm_buf, PAGE_SIZE))
@@ -618,6 +641,10 @@ static int allocate_extra_arg_buffer(struct scm_desc *desc, gfp_t flags)
 	return 0;
 }
 
+#ifdef CONFIG_TIMA_LKMAUTH
+pid_t pid_from_lkm = -1;
+#endif
+
 /**
  * scm_call2() - Invoke a syscall in the secure world
  * @fn_id: The function ID for this syscall
@@ -641,6 +668,7 @@ static int allocate_extra_arg_buffer(struct scm_desc *desc, gfp_t flags)
 */
 int scm_call2(u32 fn_id, struct scm_desc *desc)
 {
+	int call_from_ss_daemon;
 	int arglen = desc->arginfo & 0xf;
 	int ret, retry_count = 0;
 	u64 x0;
@@ -654,6 +682,13 @@ int scm_call2(u32 fn_id, struct scm_desc *desc)
 
 	x0 = fn_id | scm_version_mask;
 
+	/*
+	 * in case of secure_storage_daemon
+	 */
+	call_from_ss_daemon = (strncmp(current_thread_info()->task->comm, "secure_storage_daemon", TASK_COMM_LEN - 1) == 0);
+
+	sec_debug_secure_log(fn_id, SCM_ENTRY);
+
 	do {
 		mutex_lock(&scm_lock);
 
@@ -662,12 +697,24 @@ int scm_call2(u32 fn_id, struct scm_desc *desc)
 
 		desc->ret[0] = desc->ret[1] = desc->ret[2] = 0;
 
-		pr_debug("scm_call: func id %#llx, args: %#x, %#llx, %#llx, %#llx, %#llx\n",
-			x0, desc->arginfo, desc->args[0], desc->args[1],
-			desc->args[2], desc->x5);
 
 		trace_scm_call_start(x0, desc);
 
+#ifdef CONFIG_TIMA_LKMAUTH
+		if ((pid_from_lkm == current_thread_info()->task->pid) || call_from_ss_daemon) {
+#else
+		if (call_from_ss_daemon) {
+#endif
+			flush_cache_all();
+
+#if defined(CONFIG_ARCH_MSM8917) || defined(CONFIG_ARCH_MSM8937) ||  defined(CONFIG_ARCH_MSM8953)
+			smp_call_function((void (*)(void *))__wrap_flush_cache_all, NULL, 1);
+#endif
+
+#ifndef CONFIG_ARM64
+			outer_flush_all();
+#endif
+		}
 		if (scm_version == SCM_ARMV8_64)
 			ret = __scm_call_armv8_64(x0, desc->arginfo,
 						  desc->args[0], desc->args[1],
@@ -694,11 +741,11 @@ int scm_call2(u32 fn_id, struct scm_desc *desc)
 			pr_warn("scm: secure world has been busy for 1 second!\n");
 	}  while (ret == SCM_V2_EBUSY && (retry_count++ < SCM_EBUSY_MAX_RETRY));
 
+	sec_debug_secure_log(fn_id, SCM_EXIT);
+
 	if (ret < 0)
-		pr_err("scm_call failed: func id %#llx, arginfo: %#x, args: %#llx, %#llx, %#llx, %#llx, ret: %d, syscall returns: %#llx, %#llx, %#llx\n",
-			x0, desc->arginfo, desc->args[0], desc->args[1],
-			desc->args[2], desc->x5, ret, desc->ret[0],
-			desc->ret[1], desc->ret[2]);
+		pr_err("scm_call failed: func id %#llx, ret: %d, syscall returns: %#llx, %#llx, %#llx\n",
+			x0, ret, desc->ret[0], desc->ret[1], desc->ret[2]);
 
 	if (arglen > N_REGISTER_ARGS)
 		kfree(desc->extra_arg_buf);
@@ -783,7 +830,7 @@ int scm_call(u32 svc_id, u32 cmd_id, const void *cmd_buf, size_t cmd_len,
 	int ret;
 	size_t len = SCM_BUF_LEN(cmd_len, resp_len);
 
-	if (cmd_len > len || resp_len > len)
+	if (len == 0 || PAGE_ALIGN(len) < len)
 		return -EINVAL;
 
 	cmd = kzalloc(PAGE_ALIGN(len), GFP_KERNEL);

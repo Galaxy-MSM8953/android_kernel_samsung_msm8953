@@ -65,6 +65,9 @@ extern unsigned int sysctl_sched_small_wakee_task_load_pct;
 extern unsigned int sysctl_sched_big_waker_task_load_pct;
 extern unsigned int sysctl_sched_prefer_sync_wakee_to_waker;
 
+#ifdef CONFIG_SEC_ADAPTIVE_LOAD_TRACKING
+extern unsigned int sysctl_sched_peak_detection_pct;
+#endif
 #ifdef CONFIG_SCHED_QHMP
 extern unsigned int sysctl_sched_min_runtime;
 extern unsigned int sysctl_sched_small_task_pct;

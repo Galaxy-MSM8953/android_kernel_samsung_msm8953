@@ -58,6 +58,10 @@
 
 #include "mdss_mdp_trace.h"
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+#include "samsung/ss_dsi_panel_common.h"
+#endif
+
 #define AXI_HALT_TIMEOUT_US	0x4000
 #define AUTOSUSPEND_TIMEOUT_MS	200
 #define DEFAULT_MDP_PIPE_WIDTH	2048
@@ -99,7 +103,8 @@ static struct mdss_panel_intf pan_types[] = {
 	{"edp", MDSS_PANEL_INTF_EDP},
 	{"hdmi", MDSS_PANEL_INTF_HDMI},
 };
-static char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
+
+char mdss_mdp_panel[MDSS_MAX_PANEL_LEN];
 
 struct mdss_hw mdss_mdp_hw = {
 	.hw_ndx = MDSS_HW_MDP,
@@ -1711,7 +1716,7 @@ static int mdss_mdp_debug_init(struct platform_device *pdev,
 
 	mdss_debug_register_io("mdp", &mdata->mdss_io, &dbg_blk);
 	mdss_debug_register_dump_range(pdev, dbg_blk, "qcom,regs-dump-mdp",
-		"qcom,regs-dump-names-mdp", "qcom,regs-dump-xin-id-mdp");
+		"qcom,regs-dump-names-mdp");
 
 	if (mdata->vbif_io.base)
 		mdss_debug_register_io("vbif", &mdata->vbif_io, NULL);
@@ -2176,7 +2181,7 @@ static int mdss_mdp_get_pan_cfg(struct mdss_panel_cfg *pan_cfg)
 	/* point to the start of panel name */
 	t = t + 1;
 	strlcpy(&pan_cfg->arg_cfg[0], t, sizeof(pan_cfg->arg_cfg));
-	pr_debug("%d: t=[%s] panel name=[%s]\n", __LINE__,
+	pr_info("%d: t=[%s] panel name=[%s]\n", __LINE__,
 		t, pan_cfg->arg_cfg);
 
 	panel_len = strlen(pan_cfg->arg_cfg);
@@ -2755,6 +2760,11 @@ static int mdss_mdp_probe(struct platform_device *pdev)
 			sizeof(u32), GFP_KERNEL);
 	if (mdss_res->mdp_irq_mask == NULL)
 		return -ENOMEM;
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	if (!mdss_panel_attached(DISPLAY_1) && !mdss_panel_attached(DISPLAY_2))
+		mdata->handoff_pending = false;
+#endif
 
 	pr_info("mdss version = 0x%x, bootloader display is %s, num %d, intf_sel=0x%08x\n",
 		mdata->mdp_rev, num_of_display_on ? "on" : "off",

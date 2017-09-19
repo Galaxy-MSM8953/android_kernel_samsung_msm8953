@@ -1099,6 +1099,10 @@ config SERIAL_MSM_HSL_CONSOLE
 	select SERIAL_EARLYCON
 	default n
 
+config SERIAL_FACTORY_UART_HS
+	bool "Enable MSM UART High Speed in factory mode"
+	default n
+
 config SERIAL_VT8500
 	bool "VIA VT8500 on-chip serial port support"
 	depends on ARCH_VT8500

@@ -10,7 +10,12 @@
 #
 # Copyright (C) 1995-2001 by Russell King
 
+ifeq ($(CONFIG_RELOCATABLE_KERNEL), y) 
+LDFLAGS_vmlinux	:=-p --no-undefined -X -pie -Bsymbolic
+else 
 LDFLAGS_vmlinux	:=-p --no-undefined -X
+endif 
+
 CPPFLAGS_vmlinux.lds = -DTEXT_OFFSET=$(TEXT_OFFSET)
 OBJCOPYFLAGS	:=-O binary -R .note -R .note.gnu.build-id -R .comment -S
 GZFLAGS		:=-9
@@ -89,7 +94,16 @@ zinstall install: vmlinux
 PHONY += dtbs dtbs_install
 
 dtbs: prepare scripts
-	$(Q)$(MAKE) $(build)=$(boot)/dts
+#	$(Q)$(MAKE) $(build)=$(boot)/dts
+# MSM8953
+ifeq ($(CONFIG_ARCH_MSM8953),y)
+	$(Q)$(MAKE) $(build)=$(boot)/dts/samsung/msm8953
+# MSM8937
+else ifeq ($(CONFIG_ARCH_MSM8937),y)
+	$(Q)$(MAKE) $(build)=$(boot)/dts/samsung/msm8937
+else
+	$(Q)$(MAKE) $(build)=$(boot)/dts/qcom
+endif
 
 dtbs_install:
 	$(Q)$(MAKE) $(dtbinst)=$(boot)/dts
