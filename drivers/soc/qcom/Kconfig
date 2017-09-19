@@ -301,7 +301,7 @@ config MSM_L2_IA_DEBUG
          capability. It exposes L2 indirect access
          debugfs interface to get/set data, address,
          and target cpus.
-		 
+
 config MSM_RPM_SMD
 	bool "RPM driver using SMD protocol"
 	help
@@ -477,19 +477,6 @@ config MSM_GLINK_SMEM_NATIVE_XPRT
 	  physical transport.  The nature of shared memory limits this G-Link
 	  transport to only connecting with entities internal to the
 	  System-on-Chip.
-
-config MSM_SPCOM
-	depends on MSM_GLINK
-	bool "Secure Processor Communication over GLINK"
-	help
-	  spcom driver allows loading Secure Processor Applications and
-	  sending messages to Secure Processor Applications.
-	  spcom provides interface to both user space app and kernel driver.
-	  It is using glink as the transport layer, which provides multiple
-	  logical channels over signle physical channel.
-	  The physical layer is based on shared memory and interrupts.
-	  spcom provides clients/server API, although currently only one client
-	  or server is allowed per logical channel.
 
 config MSM_SMEM_LOGGING
 	depends on MSM_SMEM

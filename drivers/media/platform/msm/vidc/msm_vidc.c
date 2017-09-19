@@ -316,6 +316,10 @@ err_invalid_input:
 static inline void populate_buf_info(struct buffer_info *binfo,
 			struct v4l2_buffer *b, u32 i)
 {
+	if (i >= VIDEO_MAX_PLANES) {
+		dprintk(VIDC_ERR, "%s: Invalid input\n", __func__);
+		return;
+	}
 	binfo->type = b->type;
 	binfo->fd[i] = b->m.planes[i].reserved[0];
 	binfo->buff_off[i] = b->m.planes[i].reserved[1];
@@ -358,7 +362,7 @@ static struct msm_smem *map_buffer(struct msm_vidc_inst *inst,
 	struct msm_smem *handle = NULL;
 	handle = msm_comm_smem_user_to_kernel(inst,
 				p->reserved[0],
-				p->reserved[1],
+				p->length,
 				buffer_type);
 	if (!handle) {
 		dprintk(VIDC_ERR,
@@ -434,8 +438,10 @@ int map_and_register_buf(struct msm_vidc_inst *inst, struct v4l2_buffer *b)
 		goto exit;
 	}
 
-	dprintk(VIDC_DBG, "[MAP] Create binfo = %pK fd = %d type = %d\n",
-			binfo, b->m.planes[0].reserved[0], b->type);
+	dprintk(VIDC_DBG,
+		"[MAP] Create binfo = %pK fd = %d size = %d type = %d\n",
+		binfo, b->m.planes[0].reserved[0],
+		b->m.planes[0].length, b->type);
 
 	for (i = 0; i < b->length; ++i) {
 		rc = 0;
@@ -1186,6 +1192,7 @@ void *msm_vidc_open(int core_id, int session_type)
 	inst->bit_depth = MSM_VIDC_BIT_DEPTH_8;
 	inst->instant_bitrate = 0;
 	inst->pic_struct = MSM_VIDC_PIC_STRUCT_PROGRESSIVE;
+	inst->colour_space = MSM_VIDC_BT601_6_525;
 
 	for (i = SESSION_MSG_INDEX(SESSION_MSG_START);
 		i <= SESSION_MSG_INDEX(SESSION_MSG_END); i++) {
@@ -1300,8 +1307,6 @@ static void cleanup_instance(struct msm_vidc_inst *inst)
 		if (inst->extradata_handle)
 			msm_comm_smem_free(inst, inst->extradata_handle);
 
-		debugfs_remove_recursive(inst->debugfs_root);
-
 		mutex_lock(&inst->pending_getpropq.lock);
 		if (!list_empty(&inst->pending_getpropq.list)) {
 			dprintk(VIDC_ERR,
@@ -1335,6 +1340,7 @@ int msm_vidc_destroy(struct msm_vidc_inst *inst)
 	for (i = 0; i < MAX_PORT_NUM; i++)
 		vb2_queue_release(&inst->bufq[i].vb2_bufq);
 
+	msm_vidc_debugfs_deinit_inst(inst);
 	pr_info(VIDC_DBG_TAG "Closed video instance: %pK\n",
 			VIDC_MSG_PRIO2STRING(VIDC_INFO), inst);
 	kfree(inst);

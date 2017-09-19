@@ -204,8 +204,6 @@ source "drivers/fingerprint/Kconfig"
 
 source "drivers/bif/Kconfig"
 
-source "drivers/gud/Kconfig"
-
 source "drivers/muic/Kconfig"
 
 source "drivers/motor/Kconfig"

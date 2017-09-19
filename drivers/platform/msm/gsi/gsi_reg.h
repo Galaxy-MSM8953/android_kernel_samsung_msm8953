@@ -1,4 +1,4 @@
-/* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015, 2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1689,4 +1689,5 @@
 
 #define GSI_GSI_INST_RAM_BASE_OFFS	0x4000
 #define GSI_GSI_INST_RAM_SIZE		0x4000
+
 #endif /* __GSI_REG_H__ */

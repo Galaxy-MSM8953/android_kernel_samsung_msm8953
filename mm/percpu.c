@@ -412,7 +412,6 @@ static int pcpu_need_to_extend(struct pcpu_chunk *chunk, bool is_atomic)
 				pcpu_schedule_balance_work();
 			}
 		}
-
 	} else {
 		margin = PCPU_ATOMIC_MAP_MARGIN_HIGH;
 	}

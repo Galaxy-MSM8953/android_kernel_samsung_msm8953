@@ -261,7 +261,7 @@ kgsl_memdesc_footprint(const struct kgsl_memdesc *memdesc)
  */
 static inline int kgsl_allocate_global(struct kgsl_device *device,
 	struct kgsl_memdesc *memdesc, uint64_t size, uint64_t flags,
-	unsigned int priv)
+	unsigned int priv, const char *name)
 {
 	int ret;
 
@@ -272,14 +272,13 @@ static inline int kgsl_allocate_global(struct kgsl_device *device,
 		ret = kgsl_sharedmem_alloc_contig(device, memdesc,
 						(size_t) size);
 	else {
-		ret = kgsl_sharedmem_page_alloc_user(memdesc,
-						(size_t) size);
+		ret = kgsl_sharedmem_page_alloc_user(memdesc, (size_t) size);
 		if (ret == 0)
 			kgsl_memdesc_map(memdesc);
 	}
 
 	if (ret == 0)
-		kgsl_mmu_add_global(device, memdesc);
+		kgsl_mmu_add_global(device, memdesc, name);
 
 	return ret;
 }

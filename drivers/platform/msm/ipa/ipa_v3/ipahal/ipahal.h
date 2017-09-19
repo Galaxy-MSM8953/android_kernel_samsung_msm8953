@@ -643,6 +643,7 @@ u32 ipahal_get_dps_img_mem_size(void);
  * Get IPA Header Processing Star image memory size at IPA SRAM
  */
 u32 ipahal_get_hps_img_mem_size(void);
+
 int ipahal_init(enum ipa_hw_type ipa_hw_type, void __iomem *base);
 void ipahal_destroy(void);
 

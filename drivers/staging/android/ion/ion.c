@@ -3,7 +3,7 @@
  * drivers/staging/android/ion/ion.c
  *
  * Copyright (C) 2011 Google, Inc.
- * Copyright (c) 2011-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -457,8 +457,7 @@ static struct ion_handle *user_ion_handle_get_check_overflow(
 
 /* passes a kref to the user ref count.
  * We know we're holding a kref to the object before and
- * after this call, so no need to reverify handle.
- */
+ * after this call, so no need to reverify handle. */
 static struct ion_handle *pass_to_user(struct ion_handle *handle)
 {
 	struct ion_client *client = handle->client;
@@ -563,8 +562,8 @@ static int ion_handle_add(struct ion_client *client, struct ion_handle *handle)
 }
 
 static struct ion_handle *__ion_alloc(struct ion_client *client, size_t len,
-		size_t align, unsigned int heap_id_mask,
-		unsigned int flags, bool grab_handle)
+			     size_t align, unsigned int heap_id_mask,
+			     unsigned int flags, bool grab_handle)
 {
 	struct ion_handle *handle;
 	struct ion_device *dev = client->dev;
@@ -672,8 +671,8 @@ static struct ion_handle *__ion_alloc(struct ion_client *client, size_t len,
 }
 
 struct ion_handle *ion_alloc(struct ion_client *client, size_t len,
-              size_t align, unsigned int heap_id_mask,
-              unsigned int flags)
+			     size_t align, unsigned int heap_id_mask,
+			     unsigned int flags)
 {
 	return __ion_alloc(client, len, align, heap_id_mask, flags, false);
 }
@@ -698,14 +697,14 @@ static void user_ion_free_nolock(struct ion_client *client,
 {
 	bool valid_handle;
 
-	WARN_ON(client != handle->client);
+	BUG_ON(client != handle->client);
 
 	valid_handle = ion_handle_validate(client, handle);
 	if (!valid_handle) {
 		WARN(1, "%s: invalid handle passed to free.\n", __func__);
 		return;
 	}
-	if (!handle->user_ref_count > 0) {
+	if (handle->user_ref_count == 0) {
 		WARN(1, "%s: User does not have access!\n", __func__);
 		return;
 	}
@@ -1284,7 +1283,7 @@ static void ion_vm_open(struct vm_area_struct *vma)
 	mutex_lock(&buffer->lock);
 	list_add(&vma_list->list, &buffer->vmas);
 	mutex_unlock(&buffer->lock);
-	 pr_debug("%s: adding %pK\n", __func__, vma);
+	pr_debug("%s: adding %pK\n", __func__, vma);
 }
 
 static void ion_vm_close(struct vm_area_struct *vma)
@@ -1621,10 +1620,10 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			ret = PTR_ERR(handle);
 		} else {
 			handle = pass_to_user(handle);
-		if (IS_ERR(handle))
-			ret = PTR_ERR(handle);
-		else
-			data.handle.handle = handle->id;
+			if (IS_ERR(handle))
+				ret = PTR_ERR(handle);
+			else
+				data.handle.handle = handle->id;
 		}
 		break;
 	}

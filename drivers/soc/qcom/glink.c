@@ -1022,7 +1022,8 @@ static void glink_edge_ctx_release(struct rwref_lock *ch_st_lock)
  *                              it is not found.
  * @xprt_ctx:	Transport to search for a matching edge.
  *
- * Return: The edge ctx corresponding to edge of @xprt_ctx.
+ * Return: The edge ctx corresponding to edge of @xprt_ctx or
+ *	NULL if memory allocation fails.
  */
 static struct glink_core_edge_ctx *edge_name_to_ctx_create(
 				struct glink_core_xprt_ctx *xprt_ctx)
@@ -1038,6 +1039,10 @@ static struct glink_core_edge_ctx *edge_name_to_ctx_create(
 		}
 	}
 	edge_ctx = kzalloc(sizeof(struct glink_core_edge_ctx), GFP_KERNEL);
+	if (!edge_ctx) {
+		mutex_unlock(&edge_list_lock_lhd0);
+		return NULL;
+	}
 	strlcpy(edge_ctx->name, xprt_ctx->edge, GLINK_NAME_SIZE);
 	rwref_lock_init(&edge_ctx->edge_ref_lock_lhd1, glink_edge_ctx_release);
 	mutex_init(&edge_ctx->edge_migration_lock_lhd2);
@@ -1146,6 +1151,7 @@ int ch_pop_remote_rx_intent(struct channel_ctx *ctx, size_t size,
 {
 	struct glink_core_rx_intent *intent;
 	struct glink_core_rx_intent *intent_tmp;
+	struct glink_core_rx_intent *best_intent = NULL;
 	unsigned long flags;
 
 	if (GLINK_MAX_PKT_SIZE < size) {
@@ -1168,19 +1174,27 @@ int ch_pop_remote_rx_intent(struct channel_ctx *ctx, size_t size,
 	list_for_each_entry_safe(intent, intent_tmp, &ctx->rmt_rx_intent_list,
 			list) {
 		if (intent->intent_size >= size) {
-			list_del(&intent->list);
-			GLINK_DBG_CH(ctx,
-					"%s: R[%u]:%zu Removed remote intent\n",
-					__func__,
-					intent->id,
-					intent->intent_size);
-			*riid_ptr = intent->id;
-			*intent_size = intent->intent_size;
-			kfree(intent);
-			spin_unlock_irqrestore(
-				&ctx->rmt_rx_intent_lst_lock_lhc2, flags);
-			return 0;
+			if (!best_intent)
+				best_intent = intent;
+			else if (best_intent->intent_size > intent->intent_size)
+				best_intent = intent;
+			if (best_intent->intent_size == size)
+				break;
 		}
+	}
+	if (best_intent) {
+		list_del(&best_intent->list);
+		GLINK_DBG_CH(ctx,
+				"%s: R[%u]:%zu Removed remote intent\n",
+				__func__,
+				best_intent->id,
+				best_intent->intent_size);
+		*riid_ptr = best_intent->id;
+		*intent_size = best_intent->intent_size;
+		kfree(best_intent);
+		spin_unlock_irqrestore(
+			&ctx->rmt_rx_intent_lst_lock_lhc2, flags);
+		return 0;
 	}
 	spin_unlock_irqrestore(&ctx->rmt_rx_intent_lst_lock_lhc2, flags);
 	return -EAGAIN;
@@ -2663,7 +2677,7 @@ int glink_close(void *handle)
 {
 	struct glink_core_xprt_ctx *xprt_ctx = NULL;
 	struct channel_ctx *ctx = (struct channel_ctx *)handle;
-	int ret;
+	int ret = 0;
 	unsigned long flags;
 	bool is_empty = false;
 
@@ -2824,7 +2838,7 @@ static int glink_tx_common(void *handle, void *pkt_priv,
 		tracer_pkt_log_event(data, GLINK_CORE_TX);
 	}
 
-	/* find matching rx intent (first-fit algorithm for now) */
+	/* find matching rx intent (best-fit algorithm for now) */
 	if (ch_pop_remote_rx_intent(ctx, size, &riid, &intent_size)) {
 		if (!(tx_flags & GLINK_TX_REQ_INTENT)) {
 			/* no rx intent available */
@@ -3805,6 +3819,10 @@ int glink_core_register_transport(struct glink_transport_if *if_ptr,
 	xprt_ptr->local_version_idx = cfg->versions_entries - 1;
 	xprt_ptr->remote_version_idx = cfg->versions_entries - 1;
 	xprt_ptr->edge_ctx = edge_name_to_ctx_create(xprt_ptr);
+	if (!xprt_ptr->edge_ctx) {
+		kfree(xprt_ptr);
+		return -ENOMEM;
+	}
 	xprt_ptr->l_features =
 			cfg->versions[cfg->versions_entries - 1].features;
 	if (!if_ptr->poll)
@@ -5228,7 +5246,7 @@ static int glink_scheduler_tx(struct channel_ctx *ctx,
 	size_t txd_len = 0;
 	size_t tx_len = 0;
 	uint32_t num_pkts = 0;
-	int ret;
+	int ret = 0;
 
 	spin_lock_irqsave(&ctx->tx_lists_lock_lhc3, flags);
 	while (txd_len < xprt_ctx->mtu &&

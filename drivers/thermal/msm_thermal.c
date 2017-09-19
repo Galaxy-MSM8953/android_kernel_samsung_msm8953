@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2361,7 +2361,6 @@ fail:
 
 static int create_sensor_id_map(struct device *dev)
 {
-	int i = 0;
 	int ret = 0;
 
 	tsens_id_map = devm_kzalloc(dev,
@@ -2372,19 +2371,10 @@ static int create_sensor_id_map(struct device *dev)
 		return -ENOMEM;
 	}
 
-	for (i = 0; i < max_tsens_num; i++) {
-		ret = tsens_get_hw_id_mapping(i, &tsens_id_map[i]);
-		/* If return -ENXIO, hw_id is default in sequence */
-		if (ret) {
-			if (ret == -ENXIO) {
-				tsens_id_map[i] = i;
-				ret = 0;
-			} else {
-				pr_err("Failed to get hw id for id:%d.err:%d\n",
-						i, ret);
-				goto fail;
-			}
-		}
+	ret = tsens_get_hw_id_mapping(max_tsens_num, tsens_id_map);
+	if (ret) {
+		pr_err("Failed to get tsens id's:%d\n", ret);
+		goto fail;
 	}
 
 	return ret;
@@ -2832,7 +2822,7 @@ static void __ref do_core_control(long temp)
 				cpu_dev = get_cpu_device(i);
 				trace_thermal_pre_core_offline(i);
 				ret = device_offline(cpu_dev);
-				if (ret)
+				if (ret < 0)
 					pr_err("Error %d offline core %d\n",
 					       ret, i);
 				trace_thermal_post_core_offline(i,
@@ -2905,7 +2895,8 @@ static int __ref update_offline_cores(int val)
 			cpu_dev = get_cpu_device(cpu);
 			trace_thermal_pre_core_offline(cpu);
 			ret = device_offline(cpu_dev);
-			if (ret) {
+			if (ret < 0) {
+				cpus_offlined &= ~BIT(cpu);
 				pr_err_ratelimited(
 					"Unable to offline CPU%d. err:%d\n",
 					cpu, ret);
@@ -2975,6 +2966,14 @@ static __ref int do_hotplug(void *data)
 			&hotplug_notify_complete) != 0)
 			;
 		reinit_completion(&hotplug_notify_complete);
+
+		/*
+		 * Suspend framework will have disabled the
+		 * hotplug functionality. So wait till the suspend exits
+		 * and then re-evaluate.
+		 */
+		if (in_suspend)
+			continue;
 		mask = 0;
 
 		mutex_lock(&core_control_mutex);

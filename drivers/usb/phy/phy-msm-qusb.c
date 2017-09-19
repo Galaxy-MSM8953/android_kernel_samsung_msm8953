@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -63,6 +63,8 @@
 #define FREEZIO_N			BIT(1)
 #define POWER_DOWN			BIT(0)
 
+#define QUSB2PHY_PORT_TEST_CTRL		0xB8
+
 #define QUSB2PHY_PORT_UTMI_CTRL1	0xC0
 #define SUSPEND_N			BIT(5)
 #define TERM_SELECT			BIT(4)
@@ -124,6 +126,7 @@ struct qusb_phy {
 	void __iomem		*tune2_efuse_reg;
 	void __iomem		*ref_clk_base;
 	void __iomem		*tcsr_phy_clk_scheme_sel;
+	void __iomem		*tcsr_phy_lvl_shift_keeper;
 
 	struct clk		*ref_clk_src;
 	struct clk		*ref_clk;
@@ -406,13 +409,18 @@ static int qusb_phy_update_dpdm(struct usb_phy *phy, int value)
 	case POWER_SUPPLY_DP_DM_DPF_DMF:
 		dev_dbg(phy->dev, "POWER_SUPPLY_DP_DM_DPF_DMF\n");
 		if (!qphy->rm_pulldown) {
+			ret = qusb_phy_enable_power(qphy, true);
+			if (ret >= 0) {
+				qphy->rm_pulldown = true;
+				dev_dbg(phy->dev, "DP_DM_F: rm_pulldown:%d\n",
+						qphy->rm_pulldown);
+			}
 
 			if (qphy->put_into_high_z_state) {
+				if (qphy->tcsr_phy_lvl_shift_keeper)
+					writel_relaxed(0x1,
+					       qphy->tcsr_phy_lvl_shift_keeper);
 
-				/* Bring up DVDD */
-				ret = qusb_phy_vdd(qphy, true);
-				if (ret < 0)
-					goto clk_error;
 				qusb_phy_gdsc(qphy, true);
 				qusb_phy_enable_clocks(qphy, true);
 
@@ -442,16 +450,7 @@ static int qusb_phy_update_dpdm(struct usb_phy *phy, int value)
 					qphy->base + QUSB2PHY_PORT_POWERDOWN);
 				/* Make sure that above write is completed */
 				wmb();
-			}
 
-			ret = qusb_phy_enable_power(qphy, true);
-			if (ret >= 0) {
-				qphy->rm_pulldown = true;
-				dev_dbg(phy->dev, "DP_DM_F: rm_pulldown:%d\n",
-						qphy->rm_pulldown);
-			}
-
-			if (qphy->put_into_high_z_state) {
 				qusb_phy_enable_clocks(qphy, false);
 				qusb_phy_gdsc(qphy, false);
 			}
@@ -493,6 +492,9 @@ static int qusb_phy_update_dpdm(struct usb_phy *phy, int value)
 			}
 
 			if (!qphy->cable_connected) {
+				if (qphy->tcsr_phy_lvl_shift_keeper)
+					writel_relaxed(0x0,
+					       qphy->tcsr_phy_lvl_shift_keeper);
 				dev_dbg(phy->dev, "turn off for HVDCP case\n");
 				ret = qusb_phy_enable_power(qphy, false);
 			}
@@ -1007,6 +1009,23 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 			writel_relaxed(intr_mask,
 				qphy->base + QUSB2PHY_PORT_INTR_CTRL);
 
+			if (linestate & (LINESTATE_DP | LINESTATE_DM)) {
+				/* enable phy auto-resume */
+				writel_relaxed(0x0C,
+					qphy->base + QUSB2PHY_PORT_TEST_CTRL);
+				/* flush the previous write before next write */
+				wmb();
+				writel_relaxed(0x04,
+					qphy->base + QUSB2PHY_PORT_TEST_CTRL);
+			}
+
+
+			dev_dbg(phy->dev, "%s: intr_mask = %x\n",
+			__func__, intr_mask);
+
+			/* Makes sure that above write goes through */
+			wmb();
+
 			qusb_phy_enable_clocks(qphy, false);
 		} else { /* Disconnect case */
 			/* Disable all interrupts */
@@ -1017,7 +1036,15 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 			wmb();
 
 			qusb_phy_enable_clocks(qphy, false);
-			qusb_phy_enable_power(qphy, false);
+			if (qphy->tcsr_phy_lvl_shift_keeper)
+				writel_relaxed(0x0,
+					qphy->tcsr_phy_lvl_shift_keeper);
+			/* Do not disable power rails if there is vote for it */
+			if (!qphy->rm_pulldown)
+				qusb_phy_enable_power(qphy, false);
+			else
+				dev_dbg(phy->dev, "race with rm_pulldown. Keep ldo ON\n");
+
 			/*
 			 * Set put_into_high_z_state to true so next USB
 			 * cable connect, DPF_DMF request performs PHY
@@ -1038,6 +1065,9 @@ static int qusb_phy_set_suspend(struct usb_phy *phy, int suspend)
 				qphy->base + QUSB2PHY_PORT_INTR_CTRL);
 		} else {
 			qusb_phy_enable_power(qphy, true);
+			if (qphy->tcsr_phy_lvl_shift_keeper)
+				writel_relaxed(0x1,
+					qphy->tcsr_phy_lvl_shift_keeper);
 			qusb_phy_enable_clocks(qphy, true);
 		}
 		qphy->suspended = false;
@@ -1203,6 +1233,17 @@ static int qusb_phy_probe(struct platform_device *pdev)
 				res->start, resource_size(res));
 		if (IS_ERR(qphy->tcsr_phy_clk_scheme_sel))
 			dev_dbg(dev, "err reading tcsr_phy_clk_scheme_sel\n");
+	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+			"tcsr_phy_level_shift_keeper");
+	if (res) {
+		qphy->tcsr_phy_lvl_shift_keeper = devm_ioremap_nocache(dev,
+				res->start, resource_size(res));
+		if (IS_ERR(qphy->tcsr_phy_lvl_shift_keeper)) {
+			dev_err(dev, "err reading tcsr_phy_lvl_shift_keeper\n");
+			qphy->tcsr_phy_lvl_shift_keeper = NULL;
+		}
 	}
 
 	qphy->dpdm_pulsing_enabled = of_property_read_bool(dev->of_node,
