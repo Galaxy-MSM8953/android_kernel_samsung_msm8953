@@ -168,7 +168,11 @@ static long msm_sensor_init_subdev_fops_ioctl(
 static ssize_t back_camera_type_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
+#if defined(CONFIG_S5K3P8SX_AK7372)
+  char cam_type[] = "LSI_S5K3P8SX_AK7372\n";
+#else
   char cam_type[] = "LSI_S5K3P3YX\n";
+#endif
   return snprintf(buf, sizeof(cam_type), "%s", cam_type);
 }
 
@@ -179,6 +183,8 @@ static ssize_t front_camera_type_show(struct device *dev,
 	char cam_type[] = "SR259\n";
 #elif defined(CONFIG_S5K5E3YX)
     char cam_type[] = "S5K5E3YX\n";
+#elif defined(CONFIG_S5K3P8SX)
+	char cam_type[] = "S5K3P8SX\n";
 #else
 	char cam_type[] = "S5K4H5YX\n";
 #endif

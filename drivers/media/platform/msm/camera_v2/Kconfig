@@ -205,6 +205,18 @@ config S5K5E3YX
 	---help---
 		Samsung 5 MP Bayer Sensor. It uses 2 mipi lanes,
 		
+config S5K3P8SX
+	bool "Sensor s5k3p8sx (BAYER 16MP)"
+	depends on MSMB_CAMERA
+	---help---
+		Samsung 16 MP Bayer Sensor. It uses 4 mipi lanes,
+
+config S5K3P8SX_AK7372
+	bool "Sensor s5k3p8sx_ak7372 (BAYER 16MP)"
+	depends on MSMB_CAMERA
+	---help---
+		Samsung 16 MP Bayer Sensor. It uses 4 mipi lanes,
+
 config OV12830
 	bool "OmniVision OV12830 (BAYER 12MP)"
 	depends on MSMB_CAMERA

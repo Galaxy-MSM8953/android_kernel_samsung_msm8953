@@ -463,6 +463,15 @@ static void android_work(struct work_struct *data)
 	} else if (dev->connected != dev->sw_connected) {
 		uevent_envp = dev->connected ? connected : disconnected;
 		next_state = dev->connected ? USB_CONNECTED : USB_DISCONNECTED;
+#ifndef CONFIG_USB_TYPEC_MANAGER_NOTIFIER
+		if (dev->connected) {
+			if (dev->cdev && (dev->cdev->desc.bcdUSB == 0x310)) {
+				o_notify->hw_param[USB_CLIENT_SUPER_SPEED_COUNT]++;	// Super-Speed	
+			} else {
+				o_notify->hw_param[USB_CLIENT_HIGH_SPEED_COUNT]++;	// High-Speed
+			}
+		}
+#endif
 		if (dev->connected && strncmp(dev->pm_qos, "low", 3))
 			pm_qos_vote = 1;
 		else if (!dev->connected || !strncmp(dev->pm_qos, "low", 3))

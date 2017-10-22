@@ -16,6 +16,9 @@
 #include <linux/of_device.h>
 #include <linux/of_gpio.h>
 #endif
+#if defined(CONFIG_CCIC_NOTIFIER)
+#include <linux/ccic/ccic_notifier.h>
+#endif
 #ifdef CONFIG_MUIC_NOTIFIER
 #include <linux/muic/muic.h>
 #include <linux/muic/muic_notifier.h>
@@ -23,6 +26,10 @@
 #ifdef CONFIG_VBUS_NOTIFIER
 #include <linux/vbus_notifier.h>
 #endif
+#if defined(CONFIG_USB_TYPEC_MANAGER_NOTIFIER)
+#include <linux/usb/manager/usb_typec_manager_notifier.h>
+#endif
+
 #include <linux/battery/sec_charging_common.h>
 
 #ifdef CONFIG_USB_DWC3
@@ -31,9 +38,17 @@
 #define PSY_NAME	"msm-usb"
 #endif
 
+#ifdef CONFIG_MUIC_SM570X_SWITCH_CONTROL_GPIO
+extern int muic_GPIO_control(int gpio);
+#endif
+
 extern void set_ncm_ready(bool ready);
 
 struct usb_notifier_platform_data {
+#if defined(CONFIG_CCIC_NOTIFIER)
+	struct	notifier_block ccic_usb_nb;
+	int is_host;
+#endif
 	struct	notifier_block usb_nb;
 	struct	notifier_block vbus_nb;
 	int	gpio_redriver_en;
@@ -87,11 +102,63 @@ static int of_usb_notifier_dt(struct device *dev,
 }
 #endif
 
-#ifdef CONFIG_MUIC_NOTIFIER
+#if defined(CONFIG_CCIC_NOTIFIER)
+static int ccic_usb_handle_notification(struct notifier_block *nb,
+		unsigned long action, void *data)
+{
+	CC_NOTI_USB_STATUS_TYPEDEF usb_status = * (CC_NOTI_USB_STATUS_TYPEDEF *)data;
+	struct otg_notify *o_notify = get_otg_notify();
+	struct usb_notifier_platform_data *pdata =
+		container_of(nb, struct usb_notifier_platform_data, ccic_usb_nb);
+
+	if(usb_status.dest != CCIC_NOTIFY_DEV_USB) {
+		return 0;
+	}
+
+	switch (usb_status.drp){
+		case USB_STATUS_NOTIFY_ATTACH_DFP:
+			pr_info("%s: Turn On Host(DFP)\n", __func__);
+#ifdef CONFIG_MUIC_SM570X_SWITCH_CONTROL_GPIO
+			/*There is some timing issue when connect with iphone by OTG connector*/
+			/*set USB_ID pin high to let MUIC doesn't do BC1.2 charging when DFP connected*/
+			muic_GPIO_control(1);
+#endif
+			send_otg_notify(o_notify, NOTIFY_EVENT_HOST, 1);
+			pdata->is_host = 1;
+			break;
+		case USB_STATUS_NOTIFY_ATTACH_UFP:
+			pr_info("%s: Turn On Device(UFP)\n", __func__);
+			send_otg_notify(o_notify, NOTIFY_EVENT_VBUS, 1);
+			break;
+		case USB_STATUS_NOTIFY_DETACH:
+			if(pdata->is_host) {
+				pr_info("%s: Turn Off Host(DFP)\n", __func__);
+#ifdef CONFIG_MUIC_SM570X_SWITCH_CONTROL_GPIO
+				muic_GPIO_control(0);
+#endif
+				send_otg_notify(o_notify, NOTIFY_EVENT_HOST, 0);
+				pdata->is_host = 0;
+			} else {
+				pr_info("%s: Turn Off Device(UFP)\n", __func__);
+				send_otg_notify(o_notify, NOTIFY_EVENT_VBUS, 0);
+			}
+			break;
+		default:
+			pr_info("%s: unsupported DRP type : %d.\n", __func__, usb_status.drp);
+			break;
+		}
+	return 0;
+}
+#elif defined(CONFIG_MUIC_NOTIFIER)
 static int usb_handle_notification(struct notifier_block *nb,
 		unsigned long action, void *data)
 {
+#ifdef CONFIG_CCIC_NOTIFIER
+	CC_NOTI_ATTACH_TYPEDEF *p_noti = (CC_NOTI_ATTACH_TYPEDEF *)data;
+	muic_attached_dev_t attached_dev = p_noti->cable_type;
+#else
 	muic_attached_dev_t attached_dev = *(muic_attached_dev_t *)data;
+#endif
 	struct otg_notify *o_notify;
 
 	o_notify = get_otg_notify();
@@ -322,7 +389,9 @@ static struct otg_notify sec_otg_notify = {
 	.disable_control = 1,
 	.auto_drive_vbus = NOTIFY_OP_PRE,
 	.device_check_sec = 3,
+#if !defined(CONFIG_CCIC_NOTIFIER)
 	.auto_drive_vbus = 1,
+#endif	
 	.set_battcall = set_online,
 };
 
@@ -358,7 +427,17 @@ static int usb_notifier_probe(struct platform_device *pdev)
 		sec_otg_notify.unsupport_host = 1;
 	set_otg_notify(&sec_otg_notify);
 	set_notify_data(&sec_otg_notify, pdata);
-#ifdef CONFIG_MUIC_NOTIFIER
+#if defined(CONFIG_CCIC_NOTIFIER)
+	pdata->is_host = 0;
+#ifdef CONFIG_USB_TYPEC_MANAGER_NOTIFIER
+	manager_notifier_register(&pdata->ccic_usb_nb, ccic_usb_handle_notification,
+		MANAGER_NOTIFY_CCIC_USB);
+#else
+	ccic_notifier_register(&pdata->ccic_usb_nb, ccic_usb_handle_notification,
+				   CCIC_NOTIFY_DEV_USB);
+#endif
+#elif defined(CONFIG_MUIC_NOTIFIER)
+
 	muic_notifier_register(&pdata->usb_nb, usb_handle_notification,
 			       MUIC_NOTIFY_DEV_USB);
 #endif
@@ -375,7 +454,14 @@ static int usb_notifier_remove(struct platform_device *pdev)
 {
 	struct usb_notifier_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	
-#ifdef CONFIG_MUIC_NOTIFIER
+#if defined(CONFIG_CCIC_NOTIFIER)
+#ifdef CONFIG_USB_TYPEC_MANAGER_NOTIFIER
+	manager_notifier_register(&pdata->ccic_usb_nb, ccic_usb_handle_notification,
+		MANAGER_NOTIFY_CCIC_USB);
+#else
+	ccic_notifier_unregister(&pdata->ccic_usb_nb);
+#endif
+#elif defined(CONFIG_MUIC_NOTIFIER)
 	muic_notifier_unregister(&pdata->usb_nb);
 #endif
 #ifdef CONFIG_VBUS_NOTIFIER

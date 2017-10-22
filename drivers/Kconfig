@@ -180,6 +180,8 @@ source "drivers/ipack/Kconfig"
 
 source "drivers/battery/Kconfig"
 
+source "drivers/battery_v2/Kconfig"
+
 source "drivers/reset/Kconfig"
 
 source "drivers/fmc/Kconfig"
@@ -211,5 +213,7 @@ source "drivers/motor/Kconfig"
 source "drivers/muic/universal/Kconfig"
 
 source "drivers/nfc/Kconfig"
+
+source "drivers/ccic/Kconfig"
 
 endmenu

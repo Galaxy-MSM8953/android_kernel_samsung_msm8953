@@ -28,6 +28,10 @@ endif
 dtb-$(CONFIG_SEC_C7LTE_CHN_HK) += msm8953-sec-c7lte_chn_hk-r02.dtb \
 				msm8953-sec-c7lte_chn_hk-r03.dtb \
 				msm8953-sec-c7lte_chn_hk-r04.dtb
+
+# For C7PROLTE_SWA
+dtb-$(CONFIG_SEC_C7PROLTE_SWA) += msm8953-sec-c7prolte_swa-r00.dtb \
+				msm8953-sec-c7prolte_swa-r01.dtb
 				
 # For C7LTE_KOR_SKT
 dtb-$(CONFIG_SEC_C7LTE_KOR_SKT) += msm8953-sec-c7lte_kor_skt-r00.dtb

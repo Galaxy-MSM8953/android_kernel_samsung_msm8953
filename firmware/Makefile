@@ -137,10 +137,15 @@ fw-shipped-$(CONFIG_VIDEO_CPIA2) += cpia2/stv0672_vp4.bin
 fw-shipped-$(CONFIG_YAM) += yam/1200.bin yam/9600.bin
 
 # Input Device
-fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS449)		+= tsp_melfas/mms449_c7.fw
+ifdef CONFIG_SEC_C7PROLTE_SWA
+fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS449)+= tsp_melfas/mms449_c7pro.fw
+fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_16XX) += abov/abov_tk_1604_c7pro.fw
+else
+fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS449)+= tsp_melfas/mms449_c7.fw
+fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_16XX) += abov/abov_tk_1604_c7.fw
+endif
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS7) 		+= tsp_stm/stm_gtaxlqlte.fw
 fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_18XX) += abov/abov_tk_1804_c7.fw
-fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_16XX) += abov/abov_tk_1604_c7.fw
 ifdef CONFIG_SEC_ON7XLTE_CHN
 fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_INCELL) += tsp_synaptics/td4300_on7xlte.fw \
 						tsp_synaptics/td4300_on7xlte_recovery.fw

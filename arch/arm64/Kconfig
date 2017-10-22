@@ -361,6 +361,12 @@ config SEC_C7LTE_CHN
 	help
 	  This enables support for Samsung C7 LTE CHN device.
 
+config SEC_C7PROLTE_SWA
+	bool "Enable Support for Samsung C7pro LTE SWA device."
+	depends on ARCH_MSM8953
+	help
+	  This enables support for Samsung C7pro LTE SWA device.
+
 config SEC_C7LTE_CHN_LDU
 	bool "Enable Support for Samsung C7 LTE CHN LDU device."
 	depends on ARCH_MSM8953
