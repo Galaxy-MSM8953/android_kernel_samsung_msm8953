@@ -96,11 +96,6 @@ static void msm_actuator_parse_i2c_params(struct msm_actuator_ctrl_t *a_ctrl,
 		return;
 	}
 
-	if (a_ctrl->i2c_reg_tbl == NULL) {
-		pr_err("failed. i2c reg tabl is NULL");
-		return;
-	}
-
 	size = a_ctrl->reg_tbl_size;
 	write_arr = a_ctrl->reg_tbl;
 	i2c_tbl = a_ctrl->i2c_reg_tbl;
@@ -532,7 +527,11 @@ static int32_t msm_actuator_piezo_move_focus(
 			num_steps);
 		return -EFAULT;
 	}
-
+        if (dest_step_position > a_ctrl->total_steps) {
+            pr_err("Step pos greater than total steps = %d\n",
+                    dest_step_position);
+            return -EFAULT;
+        }
 	a_ctrl->i2c_tbl_index = 0;
 	a_ctrl->func_tbl->actuator_parse_i2c_params(a_ctrl,
 		(num_steps *
@@ -1216,11 +1215,9 @@ static int32_t msm_actuator_set_param(struct msm_actuator_ctrl_t *a_ctrl,
 
 	if (copy_from_user(&a_ctrl->region_params,
 		(void *)set_info->af_tuning_params.region_params,
-		a_ctrl->region_size * sizeof(struct region_params_t))) {
-		a_ctrl->total_steps = 0;
-		pr_err("Error copying region_params\n");
+		a_ctrl->region_size * sizeof(struct region_params_t)))
 		return -EFAULT;
-	}
+
 	if (a_ctrl->act_device_type == MSM_CAMERA_PLATFORM_DEVICE) {
 		cci_client = a_ctrl->i2c_client.cci_client;
 		cci_client->sid =
