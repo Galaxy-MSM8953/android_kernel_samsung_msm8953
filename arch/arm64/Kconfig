@@ -339,7 +339,17 @@ config ARCH_MSM8994_V1_TLBI_WA
 	  [39:38] bits of VA are tied to zero and due to which TLBI
 	  operations with VA or ASID will not work.
 
+config SEC_J7POPLTE_USA_SPR
+	bool "Enable Support for Samsung J7POP LTE USA SPR device."
+	depends on ARCH_MSM8953
+	help
+	  This enables support for Samsung J7POP LTE USA SPR device.
+
 endmenu
+
+config SAMSUNG_PRODUCT_SHIP
+        bool "set up for product shipping"
+        default n
 
 menu "Bus support"
 
