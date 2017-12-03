@@ -17,7 +17,9 @@
 #include <linux/sched_clock.h>
 #include <linux/seqlock.h>
 #include <linux/bitops.h>
-
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 struct clock_data {
 	ktime_t wrap_kt;
 	u64 epoch_ns;
@@ -63,7 +65,9 @@ unsigned long long notrace sched_clock(void)
 	u64 epoch_cyc;
 	u64 cyc;
 	unsigned long seq;
-
+#ifdef CONFIG_SEC_DEBUG
+	u64 local;
+#endif
 	if (cd.suspended)
 		return cd.epoch_ns;
 
@@ -75,6 +79,11 @@ unsigned long long notrace sched_clock(void)
 
 	cyc = read_sched_clock();
 	cyc = (cyc - epoch_cyc) & sched_clock_mask;
+#ifdef CONFIG_SEC_DEBUG
+	local = epoch_ns + cyc_to_ns(cyc, cd.mult, cd.shift);
+	sec_debug_save_last_ns(local);
+	return local;
+#endif
 	return epoch_ns + cyc_to_ns(cyc, cd.mult, cd.shift);
 }
 

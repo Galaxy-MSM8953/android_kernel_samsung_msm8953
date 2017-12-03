@@ -15,10 +15,12 @@
 #include <linux/sched.h>
 #include <linux/interrupt.h>
 #include <linux/kernel_stat.h>
-
 #include <trace/events/irq.h>
 
 #include "internals.h"
+
+#include <linux/sec_debug.h>
+
 
 /**
  * handle_bad_irq - handle spurious and unhandled irqs
@@ -139,9 +141,11 @@ handle_irq_event_percpu(struct irq_desc *desc, struct irqaction *action)
 	do {
 		irqreturn_t res;
 
+		sec_debug_irq_sched_log(irq, action->handler, (char *)action->name, IRQ_ENTRY);
 		trace_irq_handler_entry(irq, action);
 		res = action->handler(irq, action->dev_id);
 		trace_irq_handler_exit(irq, action, res);
+		sec_debug_irq_sched_log(irq, action->handler, (char *)action->name, IRQ_EXIT);
 
 		if (WARN_ONCE(!irqs_disabled(),"irq %u handler %pF enabled interrupts\n",
 			      irq, action->handler))
