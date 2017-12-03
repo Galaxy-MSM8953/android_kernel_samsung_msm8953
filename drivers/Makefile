@@ -177,3 +177,6 @@ obj-$(CONFIG_MOBICORE_DRIVER)	+= gud/
 
 # MUIC
 obj-$(CONFIG_USE_MUIC)		+= muic/
+
+# Motor
+obj-y				+= motor/
