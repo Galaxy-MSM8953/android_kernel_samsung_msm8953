@@ -357,6 +357,11 @@ static int gic_suspend(void)
 	return 0;
 }
 
+#ifdef CONFIG_SEC_PM
+extern char last_resume_kernel_reason[];
+extern int last_resume_kernel_reason_len;
+#endif
+
 static void gic_show_resume_irq(struct gic_chip_data *gic)
 {
 	unsigned int i;
@@ -385,7 +390,14 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 		else if (desc->action && desc->action->name)
 			name = desc->action->name;
 
+#ifdef CONFIG_SEC_PM
+		pr_info("Resume caused by IRQ %d(GIC %d) %s\n", irq, i, name);
+		last_resume_kernel_reason_len +=
+			sprintf(last_resume_kernel_reason + last_resume_kernel_reason_len,
+			"%d,%d,%s|", irq, i, name);
+#else
 		pr_warn("%s: %d triggered %s\n", __func__, irq, name);
+#endif
 	}
 }
 

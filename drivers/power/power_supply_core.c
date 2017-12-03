@@ -308,31 +308,19 @@ static void power_supply_changed_work(struct work_struct *work)
 	dev_dbg(psy->dev, "%s\n", __func__);
 
 	spin_lock_irqsave(&psy->changed_lock, flags);
-	/*
-	 * Check 'changed' here to avoid issues due to race between
-	 * power_supply_changed() and this routine. In worst case
-	 * power_supply_changed() can be called again just before we take above
-	 * lock. During the first call of this routine we will mark 'changed' as
-	 * false and it will stay false for the next call as well.
-	 */
-	if (likely(psy->changed)) {
+	if (psy->changed) {
 		psy->changed = false;
 		spin_unlock_irqrestore(&psy->changed_lock, flags);
+
 		class_for_each_device(power_supply_class, NULL, psy,
 				      __power_supply_changed_work);
+
 		power_supply_update_leds(psy);
-		atomic_notifier_call_chain(&power_supply_notifier,
-				PSY_EVENT_PROP_CHANGED, psy);
+
 		kobject_uevent(&psy->dev->kobj, KOBJ_CHANGE);
 		spin_lock_irqsave(&psy->changed_lock, flags);
 	}
-
-	/*
-	 * Hold the wakeup_source until all events are processed.
-	 * power_supply_changed() might have called again and have set 'changed'
-	 * to true.
-	 */
-	if (likely(!psy->changed))
+	if (!psy->changed)
 		pm_relax(psy->dev);
 	spin_unlock_irqrestore(&psy->changed_lock, flags);
 }
@@ -647,15 +635,14 @@ static int psy_register_thermal(struct power_supply *psy)
 {
 	int i;
 
-	if (psy->no_thermal)
-		return 0;
-
 	/* Register battery zone device psy reports temperature */
 	for (i = 0; i < psy->num_properties; i++) {
 		if (psy->properties[i] == POWER_SUPPLY_PROP_TEMP) {
 			psy->tzd = thermal_zone_device_register(psy->name, 0, 0,
 					psy, &psy_tzd_ops, NULL, 0, 0);
-			return PTR_ERR_OR_ZERO(psy->tzd);
+			if (IS_ERR(psy->tzd))
+				return PTR_ERR(psy->tzd);
+			break;
 		}
 	}
 	return 0;

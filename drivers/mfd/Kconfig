@@ -10,6 +10,21 @@ config MFD_CORE
 	select IRQ_DOMAIN
 	default n
 
+config MFD_SM5703
+	tristate "Support for Siliconmitus SM5703 I/F PMIC"
+	depends on I2C
+	select MFD_CORE
+	default n
+	help
+	  If you say yes to this option, support will be included for the
+	  SM5703 I/F PMIC chip.
+config MFD_SM5703_EN_MRSTB
+	bool "Enable MRSTB function"
+	depends on MFD_SM5703
+	default n
+	help
+	  If you enable this function, you need to connect MRSTB to AP's GPIO,
+	  and then assign GPIO number in DTSI or board file
 config MFD_CS5535
 	tristate "AMD CS5535 and CS5536 southbridge core functions"
 	select MFD_CORE
@@ -1331,6 +1346,34 @@ config MFD_STW481X
 	  Select this option to enable the STw481x chip driver used
 	  in various ST Microelectronics and ST-Ericsson embedded
 	  Nomadik series.
+
+config MFD_SM5705
+        bool "Siliconmitus SM5705 IFPM Support"
+        depends on I2C=y
+        select MFD_CORE
+        help
+          Say yes here to support for Siliconmitus SM5705.
+          This is a Power Management IC with USBLDO, RGB(SVC led), Dual Flash, Charger 
+          controls on chip.
+          This driver provides common support for accessing the device;
+          additional drivers
+
+config MFD_S2MU005
+	bool "SAMSUNG Electronics IF PMIC Series Support"
+	depends on I2C=y
+	select MFD_CORE
+	help
+	 Support for the Samsung Electronics MFD series.
+	 This driver provides common support for accessing the device,
+	 additional drivers must be enabled in order to use the functionality
+	 of the device
+
+config LEDS_S2MU005_FLASH
+	 tristate "Siliconmitus S2MU005 flash LED driver"
+	 depends on LEDS_S2MU005
+	 help
+	  A driver for Siliconmitus S2MU005 flash LED
+	  This option enables support for the LEDs on the S2MU005.
 
 config WCD9306_CODEC
 	tristate "WCD9306 Codec"

@@ -246,6 +246,16 @@ static struct notifier_block wnb = {
 	.notifier_call = wcnss_notif_cb,
 };
 
+extern unsigned int system_rev;
+
+
+#if defined(CONFIG_SEC_C7LTE_CHN) || defined(CONFIG_SEC_C7LTE_CHN_HK)
+#define ISC7000 1
+#else
+#define ISC7000 0
+#endif
+
+#define NVBIN_FILE_WA "wlan/prima/WCNSS_qcom_wlan_nv_wa.bin"
 #define NVBIN_FILE "wlan/prima/WCNSS_qcom_wlan_nv.bin"
 
 /* On SMD channel 4K of maximum data can be transferred, including message
@@ -2340,12 +2350,22 @@ static void wcnss_nvbin_dnld(void)
 
 	down_read(&wcnss_pm_sem);
 
-	ret = request_firmware(&nv, NVBIN_FILE, dev);
-
-	if (ret || !nv || !nv->data || !nv->size) {
-		pr_err("wcnss: %s: request_firmware failed for %s (ret = %d)\n",
-			__func__, NVBIN_FILE, ret);
-		goto out;
+	if (ISC7000 == 1 && system_rev <= 3) {
+		ret = request_firmware(&nv, NVBIN_FILE_WA, dev);
+		
+		if (ret || !nv || !nv->data || !nv->size) {
+			pr_err("wcnss: %s: request_firmware failed for %s (ret = %d)\n",
+				__func__, NVBIN_FILE_WA, ret);
+			goto out;
+		}
+	}else {
+		ret = request_firmware(&nv, NVBIN_FILE, dev);
+		
+		if (ret || !nv || !nv->data || !nv->size) {
+			pr_err("wcnss: %s: request_firmware failed for %s (ret = %d)\n",
+				__func__, NVBIN_FILE, ret);
+			goto out;
+		}
 	}
 
 	/* First 4 bytes in nv blob is validity bitmap.
@@ -3246,6 +3266,9 @@ static int wcnss_node_open(struct inode *inode, struct file *file)
 {
 	struct platform_device *pdev;
 	int rc = 0;
+
+
+
 
 	if (!penv)
 		return -EFAULT;

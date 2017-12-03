@@ -60,7 +60,13 @@ obj-$(CONFIG_LEDS_SYSCON)		+= leds-syscon.o
 obj-$(CONFIG_LEDS_VERSATILE)		+= leds-versatile.o
 obj-$(CONFIG_LEDS_MENF21BMC)		+= leds-menf21bmc.o
 obj-$(CONFIG_LEDS_AW2013)		+= leds-aw2013.o
-
+obj-$(CONFIG_LEDS_SM5705)		+= leds-sm5705.o
+obj-$(CONFIG_LEDS_SM5705_RGB)		+= leds-sm5705-rgb.o
+obj-$(CONFIG_LEDS_KTD2026)		+= leds-ktd2026.o
+obj-$(CONFIG_FLASHLIGHT)		+= flashlight.o
+obj-$(CONFIG_SM_FLASH_LED)		+= smfled.o
+obj-$(CONFIG_FLED_SM5703)		+= sm5703_fled.o
+obj-$(CONFIG_LEDS_S2MU005)		+= leds-s2mu005.o
 # LED SPI Drivers
 obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o
 

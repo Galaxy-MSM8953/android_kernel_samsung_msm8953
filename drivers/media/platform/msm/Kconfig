@@ -29,6 +29,13 @@ config MSM_CAMERA_AUTOMOTIVE
 	---help---
 	  Enables support for automotive targets
 
+config SR259
+	bool "Sensor SR259 (BAYER 2M)"
+	depends on MSMB_CAMERA
+	---help---
+		Siliconfile 2 MP Bayer Sensor,
+		Front Sensor.
+
 menuconfig MSMB_CAMERA
 	bool "Qualcomm MSM camera and video capture 2.0 support"
 	depends on ARCH_MSM && VIDEO_V4L2 && I2C

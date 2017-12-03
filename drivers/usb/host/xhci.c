@@ -673,24 +673,6 @@ int xhci_run(struct usb_hcd *hcd)
 }
 EXPORT_SYMBOL_GPL(xhci_run);
 
-static void xhci_only_stop_hcd(struct usb_hcd *hcd)
-{
-	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
-
-	spin_lock_irq(&xhci->lock);
-	xhci_halt(xhci);
-	spin_unlock_irq(&xhci->lock);
-}
-
-/*
- * Stop xHCI driver.
- *
- * This function is called by the USB core when the HC driver is removed.
- * Its opposite is xhci_run().
- *
- * Disable device contexts, disable IRQs, and quiesce the HC.
- * Reset the HC, finish any completed transactions, and cleanup memory.
- */
 void xhci_stop(struct usb_hcd *hcd)
 {
 	u32 temp;
@@ -699,7 +681,6 @@ void xhci_stop(struct usb_hcd *hcd)
 	mutex_lock(&xhci->mutex);
 
 	if (!usb_hcd_is_primary_hcd(hcd)) {
-		xhci_only_stop_hcd(xhci->shared_hcd);
 		mutex_unlock(&xhci->mutex);
 		return;
 	}
