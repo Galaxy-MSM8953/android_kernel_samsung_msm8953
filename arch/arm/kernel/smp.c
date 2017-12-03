@@ -45,6 +45,9 @@
 #include <asm/smp_plat.h>
 #include <asm/virt.h>
 #include <asm/mach/arch.h>
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 #include <asm/mpu.h>
 
 #define CREATE_TRACE_POINTS
@@ -546,6 +549,9 @@ static void ipi_cpu_stop(unsigned int cpu)
 		raw_spin_lock(&stop_lock);
 		printk(KERN_CRIT "CPU%u: stopping\n", cpu);
 		dump_stack();
+#ifdef CONFIG_SEC_DEBUG
+		sec_debug_save_context();
+#endif
 		raw_spin_unlock(&stop_lock);
 	}
 

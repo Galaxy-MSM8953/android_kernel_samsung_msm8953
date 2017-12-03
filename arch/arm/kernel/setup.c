@@ -153,9 +153,14 @@ char elf_platform[ELF_PLATFORM_SIZE];
 EXPORT_SYMBOL(elf_platform);
 
 static const char *cpu_name;
-static const char *machine_name;
+const char *machine_name;
 static char __initdata cmd_line[COMMAND_LINE_SIZE];
 const struct machine_desc *machine_desc __initdata;
+
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
+const char *unit_name;
+EXPORT_SYMBOL(unit_name);
+#endif
 
 static union { char c[4]; unsigned long l; } endian_test __initdata = { { 'l', '?', '?', 'b' } };
 #define ENDIANNESS ((char)endian_test.l)
@@ -930,6 +935,10 @@ void __init setup_arch(char **cmdline_p)
 		mdesc = setup_machine_tags(__atags_pointer, __machine_arch_type);
 	machine_desc = mdesc;
 	machine_name = mdesc->name;
+	dump_stack_set_arch_desc("%s (DT)", machine_name);
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
+	unit_name = machine_name;
+#endif
 
 	if (mdesc->reboot_mode != REBOOT_HARD)
 		reboot_mode = mdesc->reboot_mode;
