@@ -1476,7 +1476,7 @@ static int fib6_walk_continue(struct fib6_walker *w)
 skip:
 			w->state = FWS_U;
 		case FWS_U:
-			if (fn == w->root)
+			if (fn == w->root || !fn->parent)
 				return 0;
 			pn = fn->parent;
 			w->node = pn;
