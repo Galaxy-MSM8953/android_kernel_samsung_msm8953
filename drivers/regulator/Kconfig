@@ -898,5 +898,18 @@ config REGULATOR_KRYO
 	  Say yes to support management of LDO and BHS modes for the clusters in the
 	  CPU subsystem.
 
+config REGULATOR_SM5703
+	depends on MFD_SM5703
+	tristate "SM5703 LDO and Buck"
+	help
+	 Say y here to support the regulators found on the Siliconmitus SM5703 I/F PMIC.
+
+config REGULATOR_SM5705
+	tristate "SM705 regulator"
+	depends on MFD_SM5705
+	help
+	 This driver controls a SM5705 regulator
+          via I2C bus. SM5705 is comprised of USBLDOs.
+
 endif
 
