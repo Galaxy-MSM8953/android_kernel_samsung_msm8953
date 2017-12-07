@@ -35,6 +35,10 @@
 #include "pinctrl-msm.h"
 #include "../pinctrl-utils.h"
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+#include <ss_dsi_panel_common.h>
+#endif
+
 #define MAX_NR_GPIO 300
 #define PS_HOLD_OFFSET 0x820
 #define TLMM_EBI2_EMMC_GPIO_CFG 0x111000
@@ -808,6 +812,10 @@ static void msm_gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 	u32 val;
 	int i;
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	struct irq_desc *descriptor;
+#endif
+
 	chained_irq_enter(chip, desc);
 
 	/*
@@ -819,6 +827,11 @@ static void msm_gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 		val = readl(pctrl->regs + g->intr_status_reg);
 		if (val & BIT(g->intr_status_bit)) {
 			irq_pin = irq_find_mapping(gc->irqdomain, i);
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			descriptor = irq_to_desc(irq_pin);
+			if (!IS_ERR_OR_NULL(descriptor))
+				mdss_samsung_resume_event(descriptor->irq_data.irq);
+#endif
 			generic_handle_irq(irq_pin);
 			handled++;
 		}
