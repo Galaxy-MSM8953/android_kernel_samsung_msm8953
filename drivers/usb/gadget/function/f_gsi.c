@@ -649,7 +649,8 @@ static void ipa_disconnect_handler(struct gsi_data_port *d_port)
 	usb_gsi_ep_op(d_port->in_ep, (void *)&block_db,
 				GSI_EP_OP_SET_CLR_BLOCK_DBL);
 
-	usb_ep_disable(gsi->d_port.in_ep);
+	if (gsi->d_port.in_ep)
+		usb_ep_disable(gsi->d_port.in_ep);
 
 	if (gsi->d_port.out_ep)
 		usb_ep_disable(gsi->d_port.out_ep);
@@ -1167,14 +1168,23 @@ static ssize_t gsi_ctrl_dev_write(struct file *fp, const char __user *buf,
 	struct gsi_ctrl_port *c_port = container_of(fp->private_data,
 						struct gsi_ctrl_port,
 						ctrl_device);
-	struct f_gsi *gsi = c_port_to_gsi(c_port);
-	struct usb_request *req = c_port->notify_req;
+	struct f_gsi *gsi;
+	struct usb_request *req;
+		
+	if (!c_port) {
+		log_event_err("%s: c_port %p",
+			__func__, c_port);
+		return -ENODEV;
+	}
+	
+	gsi = c_port_to_gsi(c_port);
+	req = c_port->notify_req;
 
 	log_event_dbg("Enter %zu", count);
 
-	if (!c_port || !req || !req->buf) {
-		log_event_err("%s: c_port %p req %p req->buf %p",
-			__func__, c_port, req, req ? req->buf : req);
+	if (!req || !req->buf) {
+		log_event_err("%s: req %p req->buf %p",
+			__func__, req, req ? req->buf : req);
 		return -ENODEV;
 	}
 
