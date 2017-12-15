@@ -488,6 +488,21 @@ static void conf_usage(const char *progname)
 	printf("  --randconfig            New config with random answer to all options\n");
 }
 
+static void conf_check_read(const char *confname, const char *logmsg) {
+	const char *name;
+
+	name = getenv(confname);
+	printf("%s(%s)\n", confname, name);
+	if (name) {
+		if (conf_read_simple(name, S_DEF_USER, false)) {
+			fprintf(stderr, _("***\n"
+				"*** Can't find %s configuration \"%s\"!\n"
+				"***\n"), name, logmsg);
+			exit(1);
+		}
+	}
+}
+
 int main(int ac, char **av)
 {
 	const char *progname = av[0];
@@ -582,6 +597,14 @@ int main(int ac, char **av)
 				"***\n"), defconfig_file);
 			exit(1);
 		}
+
+		conf_check_read("KCONFIG_SELINUX", "selinux");
+		conf_check_read("KCONFIG_LOG_SELINUX", "log selinux");
+		conf_check_read("KCONFIG_TIMA", "tima log");
+		conf_check_read("KCONFIG_DMVERITY", "dmverity");
+		conf_check_read("KCONFIG_VARIANT", "variant");
+		conf_check_read("KCONFIG_DEBUG", "debug");
+		conf_check_read("KCONFIG_KASLR", "kaslr");
 		break;
 	case savedefconfig:
 	case silentoldconfig:
@@ -600,7 +623,7 @@ int main(int ac, char **av)
 		if (!name)
 			break;
 		if ((strcmp(name, "") != 0) && (strcmp(name, "1") != 0)) {
-			if (conf_read_simple(name, S_DEF_USER)) {
+			if (conf_read_simple(name, S_DEF_USER, true)) {
 				fprintf(stderr,
 					_("*** Can't read seed configuration \"%s\"!\n"),
 					name);
@@ -616,8 +639,8 @@ int main(int ac, char **av)
 		case randconfig:	name = "allrandom.config"; break;
 		default: break;
 		}
-		if (conf_read_simple(name, S_DEF_USER) &&
-		    conf_read_simple("all.config", S_DEF_USER)) {
+		if (conf_read_simple(name, S_DEF_USER, true) &&
+		    conf_read_simple("all.config", S_DEF_USER, true)) {
 			fprintf(stderr,
 				_("*** KCONFIG_ALLCONFIG set, but no \"%s\" or \"all.config\" file found\n"),
 				name);

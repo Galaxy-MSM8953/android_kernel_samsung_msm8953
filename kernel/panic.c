@@ -28,6 +28,9 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/exception.h>
 
+#include <linux/sec_debug.h>
+#include <linux/sec_debug_summary.h>
+
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
 
@@ -83,6 +86,10 @@ void panic(const char *fmt, ...)
 	int state = 0;
 
 	trace_kernel_panic(0);
+
+	/* To prevent watchdog reset during panic handling. */
+	emerg_pet_watchdog();
+
 	/*
 	 * Disable local interrupts. This will prevent panic_smp_self_stop
 	 * from deadlocking the first cpu that invokes the panic, since
@@ -104,18 +111,33 @@ void panic(const char *fmt, ...)
 	if (!spin_trylock(&panic_lock))
 		panic_smp_self_stop();
 
+	secdbg_sched_msg("!!panic!!");
+
 	console_verbose();
 	bust_spinlocks(1);
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
 	pr_emerg("Kernel panic - not syncing: %s\n", buf);
+#ifdef CONFIG_RELOCATABLE_KERNEL 
+	{	
+		extern u64 *__boot_kernel_offset; 
+		u64 *kernel_addr = (u64 *) &__boot_kernel_offset;
+		pr_emerg("Kernel loaded at: 0x%llx, offset from compile-time address %llx\n", kernel_addr[1]+kernel_addr[0], kernel_addr[1]- kernel_addr[2] );
+	}
+#endif 
+
+
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
 	 * Avoid nested stack-dumping if a panic occurs during oops processing
 	 */
 	if (!test_taint(TAINT_DIE) && oops_in_progress <= 1)
 		dump_stack();
+#endif
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
+		sec_debug_save_panic_info(buf,
+			(unsigned long)__builtin_return_address(0));
 #endif
 
 	/*

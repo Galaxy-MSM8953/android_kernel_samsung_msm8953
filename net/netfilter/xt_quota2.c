@@ -272,7 +272,11 @@ quota_mt2(const struct sk_buff *skb, struct xt_action_param *par)
 		if (!(q->flags & XT_QUOTA_NO_CHANGE)) {
 			e->quota += (q->flags & XT_QUOTA_PACKET) ? 1 : skb->len;
 		}
-		ret = true;
+
+		if (!e->quota) {
+			quota2_log(par->in, par->out, e, q->name);
+		} else
+			ret = !ret;
 	} else {
 		if (e->quota >= skb->len) {
 			if (!(q->flags & XT_QUOTA_NO_CHANGE))

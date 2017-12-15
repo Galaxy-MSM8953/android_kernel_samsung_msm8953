@@ -37,7 +37,7 @@
 #define SYNAPTICS_DS4 (1 << 0)
 #define SYNAPTICS_DS5 (1 << 1)
 #define SYNAPTICS_DSX_DRIVER_PRODUCT (SYNAPTICS_DS4 | SYNAPTICS_DS5)
-#define SYNAPTICS_DSX_DRIVER_VERSION 0x2061
+#define SYNAPTICS_DSX_DRIVER_VERSION 0x2069
 
 #include <linux/version.h>
 #ifdef CONFIG_FB
@@ -75,12 +75,13 @@
 #define PDT_ENTRY_SIZE (0x0006)
 #define PAGES_TO_SERVICE (10)
 #define PAGE_SELECT_LEN (2)
-#define ADDRESS_WORD_LEN (2)
+#define ADDRESS_LEN (2)
 
 #define SYNAPTICS_RMI4_F01 (0x01)
 #define SYNAPTICS_RMI4_F11 (0x11)
 #define SYNAPTICS_RMI4_F12 (0x12)
 #define SYNAPTICS_RMI4_F1A (0x1A)
+#define SYNAPTICS_RMI4_F21 (0x21)
 #define SYNAPTICS_RMI4_F34 (0x34)
 #define SYNAPTICS_RMI4_F35 (0x35)
 #define SYNAPTICS_RMI4_F38 (0x38)
@@ -122,9 +123,9 @@
 #define MASK_2BIT 0x03
 #define MASK_1BIT 0x01
 
-#define PINCTRL_STATE_ACTIVE    "pmx_ts_active"
-#define PINCTRL_STATE_SUSPEND   "pmx_ts_suspend"
-#define PINCTRL_STATE_RELEASE   "pmx_ts_release"
+#define PINCTRL_STATE_ACTIVE    "active_state"
+#define PINCTRL_STATE_SUSPEND   "suspend_state"
+
 enum exp_fn {
 	RMI_DEV = 0,
 	RMI_FW_UPDATER,
@@ -193,9 +194,9 @@ struct synaptics_rmi4_f11_extra_data {
  * @data15_offset: offset to F12_2D_DATA15 register
  * @data15_size: size of F12_2D_DATA15 register
  * @data15_data: buffer for reading F12_2D_DATA15 register
- * @data23_offset: offset to F12_2D_DATA23 register
- * @data23_size: size of F12_2D_DATA23 register
- * @data23_data: buffer for reading F12_2D_DATA23 register
+ * @data29_offset: offset to F12_2D_DATA29 register
+ * @data29_size: size of F12_2D_DATA29 register
+ * @data29_data: buffer for reading F12_2D_DATA29 register
  * @ctrl20_offset: offset to F12_2D_CTRL20 register
  */
 struct synaptics_rmi4_f12_extra_data {
@@ -204,9 +205,9 @@ struct synaptics_rmi4_f12_extra_data {
 	unsigned char data15_offset;
 	unsigned char data15_size;
 	unsigned char data15_data[(F12_FINGERS_TO_SUPPORT + 7) / 8];
-	unsigned char data23_offset;
-	unsigned char data23_size;
-	unsigned char data23_data[F12_FINGERS_TO_SUPPORT];
+	unsigned char data29_offset;
+	unsigned char data29_size;
+	unsigned char data29_data[F12_FINGERS_TO_SUPPORT];
 	unsigned char ctrl20_offset;
 };
 
@@ -272,6 +273,7 @@ struct synaptics_rmi4_device_info {
  * @rmi4_report_mutex: mutex for input event reporting
  * @rmi4_io_ctrl_mutex: mutex for communication interface I/O
  * @rmi4_exp_init_mutex: mutex for expansion function module initialization
+ * @rmi4_irq_enable_mutex: mutex for enabling/disabling interrupt
  * @rb_work: work for rebuilding input device
  * @rb_workqueue: workqueue for rebuilding input device
  * @fb_notifier: framebuffer notifier client
@@ -294,10 +296,13 @@ struct synaptics_rmi4_device_info {
  * @f01_cmd_base_addr: command base address for f$01
  * @f01_ctrl_base_addr: control base address for f$01
  * @f01_data_base_addr: data base address for f$01
+ * @f51_query_base_addr: query base address for f$51
  * @firmware_id: firmware build ID
  * @irq: attention interrupt
  * @sensor_max_x: maximum x coordinate for 2D touch
  * @sensor_max_y: maximum y coordinate for 2D touch
+ * @force_min: minimum force value
+ * @force_max: maximum force value
  * @flash_prog_mode: flag to indicate flash programming mode status
  * @irq_enabled: flag to indicate attention interrupt enable status
  * @fingers_on_2d: flag to indicate presence of fingers in 2D area
@@ -331,6 +336,7 @@ struct synaptics_rmi4_data {
 	struct mutex rmi4_report_mutex;
 	struct mutex rmi4_io_ctrl_mutex;
 	struct mutex rmi4_exp_init_mutex;
+	struct mutex rmi4_irq_enable_mutex;
 	struct delayed_work rb_work;
 	struct workqueue_struct *rb_workqueue;
 #ifdef CONFIG_FB
@@ -338,6 +344,9 @@ struct synaptics_rmi4_data {
 	struct notifier_block fb_notifier;
 	struct work_struct reset_work;
 	struct workqueue_struct *reset_workqueue;
+	struct delayed_work fb_suspend_work;
+	struct delayed_work fb_resume_work;
+	struct workqueue_struct *fb_notify_workqueue;	
 #endif
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct early_suspend early_suspend;
@@ -358,17 +367,24 @@ struct synaptics_rmi4_data {
 	unsigned short f01_cmd_base_addr;
 	unsigned short f01_ctrl_base_addr;
 	unsigned short f01_data_base_addr;
+#ifdef F51_DISCRETE_FORCE
+	unsigned short f51_query_base_addr;
+#endif
 	unsigned int firmware_id;
 	int irq;
 	int sensor_max_x;
 	int sensor_max_y;
+	int force_min;
+	int force_max;
 	bool flash_prog_mode;
 	bool irq_enabled;
 	bool fingers_on_2d;
 	bool suspend;
 	bool sensor_sleep;
 	bool stay_awake;
+#ifdef CONFIG_FB
 	bool fb_ready;
+#endif
 	bool f11_wakeup_gesture;
 	bool f12_wakeup_gesture;
 	bool enable_wakeup_gesture;
@@ -388,7 +404,6 @@ struct synaptics_rmi4_data {
 	struct pinctrl *ts_pinctrl;
 	struct pinctrl_state *pinctrl_state_active;
 	struct pinctrl_state *pinctrl_state_suspend;
-	struct pinctrl_state *pinctrl_state_release;
 #if defined(CONFIG_SECURE_TOUCH_SYNAPTICS_DSX_V26)
 	atomic_t st_enabled;
 	atomic_t st_pending_irqs;
@@ -398,6 +413,11 @@ struct synaptics_rmi4_data {
 	struct clk *core_clk;
 	struct clk *iface_clk;
 #endif
+#ifdef CONFIG_SEC_INCELL
+	bool is_esd;
+#endif
+	bool palm_index[F12_FINGERS_TO_SUPPORT];
+	bool palm_event;
 };
 
 struct synaptics_dsx_bus_access {
@@ -440,7 +460,17 @@ void synaptics_rmi4_bus_exit_v26(void);
 void synaptics_rmi4_new_function(struct synaptics_rmi4_exp_fn *exp_fn_module,
 		bool insert);
 
-int synaptics_fw_updater(const unsigned char *fw_data);
+int synaptics_fw_updater(const unsigned char *fw_data, bool force);
+
+#ifdef CONFIG_DRV_SAMSUNG
+void get_device_fw_ver(char *buff, int buff_size);
+
+void get_image_fw_ver(char *buff, int buff_size);
+
+void synaptics_rmi4_close(struct input_dev *dev);
+
+int synaptics_rmi4_open(struct input_dev *dev);
+#endif
 
 static inline int synaptics_rmi4_reg_read(
 		struct synaptics_rmi4_data *rmi4_data,

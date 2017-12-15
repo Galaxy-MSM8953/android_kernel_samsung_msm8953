@@ -160,8 +160,15 @@ struct cpufreq_interactive_tunables {
 
 	/* Whether to enable prediction or not */
 	bool enable_prediction;
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+
+	unsigned int lpm_disable_freq;
+#endif
 };
 
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+extern int lpm_set_mode(u8 cpu_mask, u32 power_level, bool on);
+#endif
 /* For cases where we have single governor instance for system */
 static struct cpufreq_interactive_tunables *common_tunables;
 static struct cpufreq_interactive_tunables *cached_common_tunables;
@@ -479,6 +486,13 @@ static void cpufreq_interactive_timer(unsigned long data)
 	bool skip_hispeed_logic, skip_min_sample_time;
 	bool jump_to_max_no_ts = false;
 	bool jump_to_max = false;
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+	int tl_at_cur;
+	int required_load_to_set_lpm;
+	u8 cpu_mask=0x01;
+	//masking 0x00000001:WFI, 0x00000002:PC, 0x00000003:WFI+PC
+	u32 power_level_mask=0x00000002;
+#endif
 
 	if (!down_read_trylock(&ppol->enable_sem))
 		return;
@@ -539,6 +553,24 @@ static void cpufreq_interactive_timer(unsigned long data)
 		pol_load = max(pol_load, cpu_load);
 		trace_cpufreq_interactive_cpuload(cpu, cpu_load, new_load_pct,
 						  prev_l, pred_l);
+
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+			//calculate the load at the lpm_disable_freq
+			tl_at_cur = freq_to_targetload(ppol->policy->governor_data, ppol->policy->cur);
+			required_load_to_set_lpm = mult_frac(tunables->timer_rate * tl_at_cur, tunables->lpm_disable_freq, ppol->policy->cpuinfo.max_freq)/100;
+			//determine lpm disable or not.
+			if(sl[i].prev_load >= required_load_to_set_lpm){
+				lpm_set_mode(cpu_mask << cpu, power_level_mask << cpu*4, 0);
+			}else if (ppol->policy->min >= tunables->lpm_disable_freq){
+#if defined(CONFIG_ARCH_MSM8917)
+				lpm_set_mode(0xFF, 0x22222222, 0);
+#else
+				lpm_set_mode(0xF0, 0x22222222, 0);
+#endif
+			}else {
+				lpm_set_mode(cpu_mask << cpu, power_level_mask << cpu*4, 1);
+			}
+#endif
 
 		/* save loadadjfreq for notification */
 		pcpu->loadadjfreq = max(t_prevlaf, t_predlaf);
@@ -1028,7 +1060,26 @@ static ssize_t store_hispeed_freq(struct cpufreq_interactive_tunables *tunables,
 	tunables->hispeed_freq = val;
 	return count;
 }
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+static ssize_t show_lpm_disable_freq(struct cpufreq_interactive_tunables *tunables,
+		char *buf)
+{
+	return sprintf(buf, "%u\n", tunables->lpm_disable_freq);
+}
 
+static ssize_t store_lpm_disable_freq(struct cpufreq_interactive_tunables *tunables,
+		const char *buf, size_t count)
+{
+	int ret;
+	long unsigned int val;
+
+	ret = strict_strtoul(buf, 0, &val);
+	if (ret < 0)
+		return ret;
+	tunables->lpm_disable_freq = val;
+	return count;
+}
+#endif
 #define show_store_one(file_name)					\
 static ssize_t show_##file_name(					\
 	struct cpufreq_interactive_tunables *tunables, char *buf)	\
@@ -1448,6 +1499,9 @@ show_store_gov_pol_sys(align_windows);
 show_store_gov_pol_sys(ignore_hispeed_on_notif);
 show_store_gov_pol_sys(fast_ramp_down);
 show_store_gov_pol_sys(enable_prediction);
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+show_store_gov_pol_sys(lpm_disable_freq);
+#endif
 
 #define gov_sys_attr_rw(_name)						\
 static struct global_attr _name##_gov_sys =				\
@@ -1478,6 +1532,9 @@ gov_sys_pol_attr_rw(align_windows);
 gov_sys_pol_attr_rw(ignore_hispeed_on_notif);
 gov_sys_pol_attr_rw(fast_ramp_down);
 gov_sys_pol_attr_rw(enable_prediction);
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+gov_sys_pol_attr_rw(lpm_disable_freq);
+#endif
 
 static struct global_attr boostpulse_gov_sys =
 	__ATTR(boostpulse, 0200, NULL, store_boostpulse_gov_sys);
@@ -1505,6 +1562,9 @@ static struct attribute *interactive_attributes_gov_sys[] = {
 	&ignore_hispeed_on_notif_gov_sys.attr,
 	&fast_ramp_down_gov_sys.attr,
 	&enable_prediction_gov_sys.attr,
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+	&lpm_disable_freq_gov_sys.attr,
+#endif
 	NULL,
 };
 
@@ -1533,6 +1593,9 @@ static struct attribute *interactive_attributes_gov_pol[] = {
 	&ignore_hispeed_on_notif_gov_pol.attr,
 	&fast_ramp_down_gov_pol.attr,
 	&enable_prediction_gov_pol.attr,
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+	&lpm_disable_freq_gov_pol.attr,
+#endif
 	NULL,
 };
 
@@ -1651,7 +1714,16 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 	struct cpufreq_interactive_policyinfo *ppol;
 	struct cpufreq_frequency_table *freq_table;
 	struct cpufreq_interactive_tunables *tunables;
-
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+#if defined(CONFIG_ARCH_MSM8917)
+		u8 cpu_mask=0xFF;
+#else
+		//masking for little core
+		u8 cpu_mask=0xF0;
+#endif
+		u32 power_level_mask=0x22222222;
+		//masking if big core
+#endif
 	if (have_governor_per_policy())
 		tunables = policy->governor_data;
 	else
@@ -1750,7 +1822,10 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 		freq_table = cpufreq_frequency_get_table(policy->cpu);
 		if (!tunables->hispeed_freq)
 			tunables->hispeed_freq = policy->max;
-
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+		if (!tunables->lpm_disable_freq)
+			tunables->lpm_disable_freq = policy->max;
+#endif
 		ppol = per_cpu(polinfo, policy->cpu);
 		ppol->policy = policy;
 		ppol->target_freq = policy->cur;
@@ -1798,6 +1873,13 @@ static int cpufreq_governor_interactive(struct cpufreq_policy *policy,
 
 		__cpufreq_driver_target(policy,
 				ppol->target_freq, CPUFREQ_RELATION_L);
+#if defined(CONFIG_ARCH_MSM8953) || defined(CONFIG_ARCH_MSM8917)
+			//Disable LPM Mode when scaling_min_freq set up over than lpm_disable_freq.
+			if (policy->min >= tunables->lpm_disable_freq)
+				lpm_set_mode(cpu_mask, power_level_mask, 0);
+			else
+				lpm_set_mode(cpu_mask, power_level_mask, 1);
+#endif
 
 		down_read(&ppol->enable_sem);
 		if (ppol->governor_enabled) {

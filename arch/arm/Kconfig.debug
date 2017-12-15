@@ -1362,4 +1362,20 @@ config DEBUG_SET_MODULE_RONX
 	  against certain classes of kernel exploits.
 	  If in doubt, say "N".
 
+comment "PowerManagement Feature"
+menuconfig SEC_PM
+	bool "Samsung TN PowerManagement Feature"
+	default y
+	help
+	  Samsung TN PowerManagement Feature.
+
+if SEC_PM
+config SEC_PM_DEBUG
+	bool "Samsung TN PowerManagement Debug Feature"
+	default n
+	help
+	  Samsung TN PowerManagement Debug Feature.
+
+endif
+
 endmenu

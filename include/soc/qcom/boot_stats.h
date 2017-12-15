@@ -10,6 +10,8 @@
  * GNU General Public License for more details.
  */
 
+#ifndef __BOOT_STATS__
+#define __BOOT_STATS__
 #ifdef CONFIG_MSM_BOOT_STATS
 
 #define TIMER_KHZ 32768
@@ -38,3 +40,4 @@ void place_marker(const char *name);
 inline void place_marker(char *name);
 static inline int boot_marker_enabled(void) { return 0; }
 #endif
+#endif /*__BOOT_STATS__ */

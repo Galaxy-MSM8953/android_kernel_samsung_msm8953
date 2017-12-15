@@ -56,6 +56,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/ipi.h>
 
+#include <linux/sec_debug.h>
+
 /*
  * as from 2.5, kernels no longer have an init_tasks structure
  * so we need some other way of telling a new secondary core
@@ -586,6 +588,7 @@ static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 		show_regs(regs);
 		dump_stack();
 		arm64_check_cache_ecc(NULL);
+		sec_debug_save_context();
 		raw_spin_unlock(&stop_lock);
 	}
 
