@@ -25,12 +25,6 @@
 #define CHECK	0
 #define FREE	1
 
-#ifdef CONFIG_SEC_BSP
-#define DIAG	1
-#define FTM	2
-#define VENDOR	3
-#endif
-
 struct mem_blocks {
 	/* Client Id information */
 	uint32_t client_id;
