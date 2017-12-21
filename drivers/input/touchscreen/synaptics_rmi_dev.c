@@ -333,7 +333,10 @@ static ssize_t rmidev_read(struct file *filp, char __user *buf,
 
 clean_up:
 	mutex_unlock(&(dev_data->file_mutex));
+<<<<<<< HEAD
 
+=======
+>>>>>>> LA.UM.5.6.r1-00700-89xx.0
 	kfree(tmpbuf);
 	return retval;
 }
@@ -383,7 +386,10 @@ static ssize_t rmidev_write(struct file *filp, const char __user *buf,
 		*f_pos += retval;
 
 	mutex_unlock(&(dev_data->file_mutex));
+<<<<<<< HEAD
 
+=======
+>>>>>>> LA.UM.5.6.r1-00700-89xx.0
 	kfree(tmpbuf);
 	return retval;
 }
