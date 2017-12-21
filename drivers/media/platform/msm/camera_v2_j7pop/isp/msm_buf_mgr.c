@@ -26,12 +26,12 @@
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-device.h>
 #include <media/videobuf2-core.h>
-#include <media/msm_camera.h>
 #include <media/msm_isp.h>
 
 #include "msm.h"
 #include "msm_buf_mgr.h"
 #include "cam_smmu_api.h"
+#include "../include/media/msm_camera.h"
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)

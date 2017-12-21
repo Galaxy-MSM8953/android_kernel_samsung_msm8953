@@ -21,10 +21,10 @@
 #include <linux/delay.h>
 #include <linux/avtimer_kernel.h>
 #include <media/v4l2-subdev.h>
-#include <media/msmb_isp.h>
 #include <linux/msm-bus.h>
 #include <linux/msm-bus-board.h>
 
+#include "../include/media/msmb_isp.h"
 #include "msm_buf_mgr.h"
 
 #define VFE40_8974V1_VERSION 0x10000018
