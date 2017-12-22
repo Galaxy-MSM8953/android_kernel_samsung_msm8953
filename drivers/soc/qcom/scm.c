@@ -66,16 +66,15 @@ DEFINE_MUTEX(scm_lmh_lock);
 #define IS_CALL_AVAIL_CMD 1
 
 #define SCM_BUF_LEN(__cmd_size, __resp_size) ({ \
-		size_t x = __cmd_size + __resp_size; \
-		size_t y = sizeof(struct scm_command) + sizeof(struct scm_response); \
-		size_t result; \
-		if (x < __cmd_size || (x + y) < x) \
-			result = 0; \
-		else \
-			result = x + y; \
-		result; \
-		})
-
+	size_t x =  __cmd_size + __resp_size; \
+	size_t y = sizeof(struct scm_command) + sizeof(struct scm_response); \
+	size_t result; \
+	if (x < __cmd_size || (x + y) < x) \
+		result = 0; \
+	else \
+		result = x + y; \
+	result; \
+	})
 /**
  * struct scm_command - one SCM command buffer
  * @len: total available memory for command and response
