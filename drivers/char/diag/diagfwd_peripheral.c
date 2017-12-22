@@ -640,7 +640,6 @@ void diagfwd_close_transport(uint8_t transport, uint8_t peripheral)
 		break;
 	default:
 		return;
-
 	}
 
 	mutex_lock(&driver->diagfwd_channel_mutex[peripheral]);
