@@ -1402,11 +1402,12 @@ static int _setstate_alloc(struct kgsl_device *device,
 {
 	int ret;
 
-		ret = kgsl_sharedmem_alloc_contig(device, &iommu->setstate, PAGE_SIZE);
+	ret = kgsl_sharedmem_alloc_contig(device, &iommu->setstate, PAGE_SIZE);
 
 	if (!ret) {
 		/* Mark the setstate memory as read only */
 		iommu->setstate.flags |= KGSL_MEMFLAGS_GPUREADONLY;
+
 		kgsl_sharedmem_set(device, &iommu->setstate, 0, 0, PAGE_SIZE);
 	}
 
@@ -2276,6 +2277,7 @@ static void kgsl_iommu_put_gpuaddr(struct kgsl_memdesc *memdesc)
 {
 	if (memdesc->pagetable == NULL)
 		return;
+
 	spin_lock(&memdesc->pagetable->lock);
 
 	if (_remove_gpuaddr(memdesc->pagetable, memdesc->gpuaddr))

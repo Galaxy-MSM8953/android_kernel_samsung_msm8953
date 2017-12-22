@@ -848,9 +848,9 @@ void kgsl_sharedmem_free(struct kgsl_memdesc *memdesc)
 {
 	if (memdesc == NULL || memdesc->size == 0)
 		return;
-	
+
 	/* Make sure the memory object has been unmapped */
-	kgsl_mmu_put_gpuaddr(memdesc);	
+	kgsl_mmu_put_gpuaddr(memdesc);
 
 	if (memdesc->ops && memdesc->ops->free)
 		memdesc->ops->free(memdesc);
