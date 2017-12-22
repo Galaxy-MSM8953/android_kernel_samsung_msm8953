@@ -2026,7 +2026,7 @@ static long mbim_ioctl(struct file *fp, unsigned cmd, unsigned long arg)
 		default:
 			ret = -ENODEV;
 			pr_err("unknown transport\n");
-		        goto fail;
+			goto fail;
 		}
 
 		ret = copy_to_user((void __user *)arg, &info,
