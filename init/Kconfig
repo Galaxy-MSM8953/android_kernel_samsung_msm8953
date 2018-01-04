@@ -1164,6 +1164,14 @@ config SCHED_HMP
 	  in their instructions per-cycle capability or the maximum
 	  frequency they can attain.
 
+config SEC_ADAPTIVE_LOAD_TRACKING
+	bool "Enables adaptive per task load tracking system"
+	default n
+	help
+	  This option disables Window based load tracking policies and enables 
+	  adaptive load tracking policy. This feature will enhance the demand 
+	  calculation for task. 
+
 config SCHED_HMP_CSTATE_AWARE
 	bool "CPU C-state aware scheduler"
 	depends on SCHED_HMP

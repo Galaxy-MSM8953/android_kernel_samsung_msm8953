@@ -942,6 +942,32 @@ static ssize_t kgsl_pwrctrl_gpu_clock_stats_show(
 	return num_chars;
 }
 
+#ifdef CONFIG_SEC_PM
+static ssize_t kgsl_pwrctrl_time_in_state_show(
+					struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct kgsl_device *device = kgsl_device_from_dev(dev);
+	struct kgsl_pwrctrl *pwr;
+	int index, num_chars = 0;
+
+	if (device == NULL)
+		return 0;
+	pwr = &device->pwrctrl;
+	mutex_lock(&device->mutex);
+	kgsl_pwrscale_update_stats(device);
+	mutex_unlock(&device->mutex);
+	for (index = 0; index < pwr->num_pwrlevels - 1; index++)
+		num_chars += snprintf(buf + num_chars, PAGE_SIZE - num_chars,
+			"%d %llu\n",
+			pwr->pwrlevels[index].gpu_freq, 
+			div_u64(pwr->clock_times[index], 10000));
+
+	return num_chars;
+}
+#endif
+
 static ssize_t kgsl_pwrctrl_reset_count_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
@@ -1197,6 +1223,11 @@ static DEVICE_ATTR(gpu_available_frequencies, 0444,
 static DEVICE_ATTR(gpu_clock_stats, 0444,
 	kgsl_pwrctrl_gpu_clock_stats_show,
 	NULL);
+#ifdef CONFIG_SEC_PM
+static DEVICE_ATTR(time_in_state, 0444,
+	kgsl_pwrctrl_time_in_state_show,
+	NULL);
+#endif
 static DEVICE_ATTR(max_pwrlevel, 0644,
 	kgsl_pwrctrl_max_pwrlevel_show,
 	kgsl_pwrctrl_max_pwrlevel_store);
@@ -1243,6 +1274,9 @@ static const struct device_attribute *pwrctrl_attr_list[] = {
 	&dev_attr_gpubusy,
 	&dev_attr_gpu_available_frequencies,
 	&dev_attr_gpu_clock_stats,
+#ifdef CONFIG_SEC_PM
+	&dev_attr_time_in_state,
+#endif
 	&dev_attr_max_pwrlevel,
 	&dev_attr_min_pwrlevel,
 	&dev_attr_thermal_pwrlevel,

@@ -440,6 +440,8 @@ struct mmc_host {
 #define MMC_CAP2_SLEEP_AWAKE	(1 << 28)	/* Use Sleep/Awake (CMD5) */
 /* use max discard ignoring max_busy_timeout parameter */
 #define MMC_CAP2_MAX_DISCARD_SIZE	(1 << 29)
+#define MMC_CAP2_BKOPS_EN       (1 << 30)
+#define MMC_CAP2_CACHE_BARRIER		(1 << 31)
 
 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
 

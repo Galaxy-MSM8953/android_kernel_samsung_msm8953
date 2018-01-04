@@ -40,6 +40,8 @@
 
 #include "clock.h"
 
+#define CAMSS_GP1_24MHZ_JITTER_CORRECTION
+
 enum {
 	GCC_BASE,
 	GFX_BASE,
@@ -1121,11 +1123,17 @@ static struct rcg_clk camss_gp0_clk_src = {
 };
 
 static struct clk_freq_tbl ftbl_camss_gp1_clk_src[] = {
-	F(  50000000, gpll0_main_div2,    8,    0,     0),
-	F( 100000000,           gpll0,    8,    0,     0),
-	F( 200000000,           gpll0,    4,    0,     0),
-	F( 266670000,           gpll0,    3,    0,     0),
-	F_END
+		F(	19200000,			   xo,	   1,	 0, 	0),
+#ifdef CAMSS_GP1_24MHZ_JITTER_CORRECTION
+		F(	24000000,			gpll0,	  1,	2,	  67),
+#else
+		F(	24000000,			gpll0,	  1,	3,	 100),
+#endif
+		F(	50000000, gpll0_main_div2,	  8,	0,	   0),
+		F( 100000000,			gpll0,	  8,	0,	   0),
+		F( 200000000,			gpll0,	  4,	0,	   0),
+		F( 266670000,			gpll0,	  3,	0,	   0),
+		F_END
 };
 
 static struct rcg_clk camss_gp1_clk_src = {
@@ -2910,6 +2918,7 @@ static struct branch_clk gcc_usb3_aux_clk = {
 static struct branch_clk gcc_usb_phy_cfg_ahb_clk = {
 	.cbcr_reg = USB_PHY_CFG_AHB_CBCR,
 	.has_sibling = 1,
+	.check_enable_bit = true,
 	.no_halt_check_on_disable = true,
 	.base = &virt_bases[GCC_BASE],
 	.c = {

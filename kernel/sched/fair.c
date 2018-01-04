@@ -4076,6 +4076,10 @@ void init_new_task_load(struct task_struct *p)
 	}
 
 	p->ravg.demand = init_load_windows;
+#ifdef CONFIG_SEC_ADAPTIVE_LOAD_TRACKING
+	p->ravg.global_average = init_load_windows;
+	p->ravg.nr_global_average  = 1;
+#endif	
 	clear_ravg_pred_demand();
 	for (i = 0; i < RAVG_HIST_SIZE_MAX; ++i)
 		p->ravg.sum_history[i] = init_load_windows;

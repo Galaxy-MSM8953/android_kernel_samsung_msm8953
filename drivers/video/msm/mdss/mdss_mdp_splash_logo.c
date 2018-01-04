@@ -29,6 +29,10 @@
 #include "mdss_mdp_splash_logo.h"
 #include "mdss_smmu.h"
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG) && defined(CONFIG_SEC_DEBUG)
+#include <linux/sec_debug.h>
+#endif
+
 #define INVALID_PIPE_INDEX 0xFFFF
 #define MAX_FRAME_DONE_COUNT_WAIT 2
 
@@ -258,11 +262,21 @@ int mdss_mdp_splash_cleanup(struct msm_fb_data_type *mfd,
 		(mfd->splash_info.iommu_dynamic_attached && !use_borderfill)) {
 		if (mfd->splash_info.iommu_dynamic_attached &&
 			use_borderfill) {
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG) && defined(CONFIG_SEC_DEBUG)
+			if (!sec_debug_is_enabled()) {
+				mdss_mdp_splash_unmap_splash_mem(mfd);
+				memblock_free(mdp5_data->splash_mem_addr,
+						mdp5_data->splash_mem_size);
+				mdss_free_bootmem(mdp5_data->splash_mem_addr,
+						mdp5_data->splash_mem_size);
+			}
+#else
 			mdss_mdp_splash_unmap_splash_mem(mfd);
 			memblock_free(mdp5_data->splash_mem_addr,
 					mdp5_data->splash_mem_size);
 			mdss_free_bootmem(mdp5_data->splash_mem_addr,
 					mdp5_data->splash_mem_size);
+#endif
 		}
 		goto end;
 	}
@@ -307,6 +321,18 @@ int mdss_mdp_splash_cleanup(struct msm_fb_data_type *mfd,
 
 	mdss_mdp_ctl_splash_finish(ctl, mdp5_data->handoff);
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG) && defined(CONFIG_SEC_DEBUG)
+	if (!sec_debug_is_enabled()) {
+		if (mdp5_data->splash_mem_addr &&
+			!mfd->splash_info.iommu_dynamic_attached) {
+			/* Give back the reserved memory to the system */
+			memblock_free(mdp5_data->splash_mem_addr,
+						mdp5_data->splash_mem_size);
+			mdss_free_bootmem(mdp5_data->splash_mem_addr,
+						mdp5_data->splash_mem_size);
+		}
+	}
+#else
 	if (mdp5_data->splash_mem_addr &&
 		!mfd->splash_info.iommu_dynamic_attached) {
 		/* Give back the reserved memory to the system */
@@ -315,7 +341,7 @@ int mdss_mdp_splash_cleanup(struct msm_fb_data_type *mfd,
 		mdss_free_bootmem(mdp5_data->splash_mem_addr,
 					mdp5_data->splash_mem_size);
 	}
-
+#endif
 	mdss_mdp_footswitch_ctrl_splash(0);
 end:
 	return rc;
@@ -684,7 +710,7 @@ static __ref int mdss_mdp_splash_parse_dt(struct msm_fb_data_type *mfd)
 
 	mdp5_mdata->splash_mem_addr = offsets[0];
 	mdp5_mdata->splash_mem_size = offsets[1];
-	pr_debug("memaddr=%x size=%x\n", mdp5_mdata->splash_mem_addr,
+	pr_info("memaddr=%x size=%x\n", mdp5_mdata->splash_mem_addr,
 		mdp5_mdata->splash_mem_size);
 
 error:

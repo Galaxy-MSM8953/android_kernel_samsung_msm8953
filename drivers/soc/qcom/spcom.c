@@ -964,6 +964,7 @@ struct spcom_client *spcom_register_client(struct spcom_client_info *info)
 	ch = spcom_find_channel_by_name(name);
 	if (!ch) {
 		pr_err("channel %s doesn't exist, load App first.\n", name);
+		kfree(client);
 		return NULL;
 	}
 
@@ -1113,6 +1114,7 @@ struct spcom_server *spcom_register_service(struct spcom_service_info *info)
 	ch = spcom_find_channel_by_name(name);
 	if (!ch) {
 		pr_err("channel %s doesn't exist, load App first.\n", name);
+		kfree(server);
 		return NULL;
 	}
 
@@ -1310,6 +1312,16 @@ static int spcom_handle_send_command(struct spcom_channel *ch,
 
 	pr_debug("send req/resp ch [%s] size [%d] .\n", ch->name, size);
 
+	/*
+	 * check that cmd buf size is at least struct size,
+	 * to allow access to struct fields.
+	 */
+	if (size < sizeof(*cmd)) {
+		pr_err("ch [%s] invalid cmd buf.\n",
+				ch->name);
+		return -EINVAL;
+	}
+
 	/* Check if remote side connect */
 	if (!spcom_is_channel_connected(ch)) {
 		pr_err("ch [%s] remote side not connect.\n", ch->name);
@@ -1320,6 +1332,18 @@ static int spcom_handle_send_command(struct spcom_channel *ch,
 	buf = &cmd->buf;
 	buf_size = cmd->buf_size;
 	timeout_msec = cmd->timeout_msec;
+
+	/* Check param validity */
+	if (buf_size > SPCOM_MAX_RESPONSE_SIZE) {
+		pr_err("ch [%s] invalid buf size [%d].\n",
+				ch->name, buf_size);
+		return -EINVAL;
+	}
+	if (size != sizeof(*cmd) + buf_size) {
+		pr_err("ch [%s] invalid cmd size [%d].\n",
+				ch->name, size);
+		return -EINVAL;
+	}
 
 	/* Allocate Buffers*/
 	tx_buf_size = sizeof(*hdr) + buf_size;
@@ -1380,6 +1404,11 @@ static int modify_ion_addr(void *buf,
 
 	if (fd < 0) {
 		pr_err("invalid fd [%d].\n", fd);
+		return -ENODEV;
+	}
+
+	if (buf_size < sizeof(uint64_t)) {
+		pr_err("buf size too small [%d].\n", buf_size);
 		return -ENODEV;
 	}
 
@@ -1444,6 +1473,16 @@ static int spcom_handle_send_modified_command(struct spcom_channel *ch,
 
 	pr_debug("send req/resp ch [%s] size [%d] .\n", ch->name, size);
 
+	/*
+	 * check that cmd buf size is at least struct size,
+	 * to allow access to struct fields.
+	 */
+	if (size < sizeof(*cmd)) {
+		pr_err("ch [%s] invalid cmd buf.\n",
+			ch->name);
+		return -EINVAL;
+	}
+
 	/* Check if remote side connect */
 	if (!spcom_is_channel_connected(ch)) {
 		pr_err("ch [%s] remote side not connect.\n", ch->name);
@@ -1455,6 +1494,18 @@ static int spcom_handle_send_modified_command(struct spcom_channel *ch,
 	buf_size = cmd->buf_size;
 	timeout_msec = cmd->timeout_msec;
 	memcpy(ion_info, cmd->ion_info, sizeof(ion_info));
+
+	/* Check param validity */
+	if (buf_size > SPCOM_MAX_RESPONSE_SIZE) {
+		pr_err("ch [%s] invalid buf size [%d].\n",
+			ch->name, buf_size);
+		return -EINVAL;
+	}
+	if (size != sizeof(*cmd) + buf_size) {
+		pr_err("ch [%s] invalid cmd size [%d].\n",
+			ch->name, size);
+		return -EINVAL;
+	}
 
 	/* Allocate Buffers*/
 	tx_buf_size = sizeof(*hdr) + buf_size;
@@ -1514,6 +1565,12 @@ static int spcom_handle_lock_ion_buf_command(struct spcom_channel *ch,
 	struct ion_handle *ion_handle;
 	int i;
 
+	if (size != sizeof(*cmd)) {
+		pr_err("cmd size [%d] , expected [%d].\n",
+					(int)size, (int) sizeof(*cmd));
+		return -EINVAL;
+	}
+
 	/* Check ION client */
 	if (spcom_dev->ion_client == NULL) {
 		pr_err("invalid ion client.\n");
@@ -1560,6 +1617,12 @@ static int spcom_handle_unlock_ion_buf_command(struct spcom_channel *ch,
 	int fd = cmd->arg;
 	struct ion_client *ion_client = spcom_dev->ion_client;
 	int i;
+
+	if (size != sizeof(*cmd)) {
+		pr_err("cmd size [%d] , expected [%d].\n",
+					(int)size, (int) sizeof(*cmd));
+		return -EINVAL;
+	}
 
 	/* Check ION client */
 	if (ion_client == NULL) {
@@ -1714,6 +1777,13 @@ static int spcom_handle_read_req_resp(struct spcom_channel *ch,
 	if (!spcom_is_channel_connected(ch)) {
 		pr_err("ch [%s] remote side not connect.\n", ch->name);
 		return -ENOTCONN;
+	}
+
+	/* Check param validity */
+	if (size > SPCOM_MAX_RESPONSE_SIZE) {
+		pr_err("ch [%s] inavlid size [%d].\n",
+			ch->name, size);
+		return -EINVAL;
 	}
 
 	/* Allocate Buffers*/
@@ -1974,6 +2044,11 @@ static ssize_t spcom_device_write(struct file *filp,
 		return -EFAULT;
 	}
 
+	if (!ch) {
+		kfree(buf);
+		return -EFAULT;
+	}
+
 	ret = spcom_handle_write(ch, buf, size);
 	if (ret) {
 		pr_err("handle command error [%d].\n", ret);
@@ -2018,6 +2093,11 @@ static ssize_t spcom_device_read(struct file *filp, char __user *user_buff,
 		return -ENOMEM;
 
 	actual_size = spcom_handle_read(ch, buf, size);
+	if ((actual_size <= 0) || (actual_size > size)) {
+		pr_err("invalid actual_size [%d].\n", actual_size);
+		kfree(buf);
+		return -EFAULT;
+	}
 
 	ret = copy_to_user(user_buff, buf, actual_size);
 

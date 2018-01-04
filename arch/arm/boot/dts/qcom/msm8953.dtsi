@@ -1559,6 +1559,20 @@
 		qcom,ce-opp-freq = <100000000>;
 	};
 
+	mcd: mcd {
+		compatible = "qcom,mcd";
+		qcom,ce-hw-instance = <0>;
+		qcom,ce-device = <0>;
+		interrupts = <0 248 0>;
+		interrupt-names = "mcd_irq";
+		clocks = <&clock_gcc clk_crypto_clk_src>,
+			 <&clock_gcc clk_gcc_crypto_clk>,
+			 <&clock_gcc clk_gcc_crypto_ahb_clk>,
+			 <&clock_gcc clk_gcc_crypto_axi_clk>;
+		clock-names = "core_clk_src", "core_clk",
+				"iface_clk", "bus_clk";
+		qcom,ce-opp-freq = <100000000>;
+	};
 	qcom_cedev: qcedev@720000 {
 		compatible = "qcom,qcedev";
 		reg = <0x720000 0x20000>,
@@ -2267,9 +2281,9 @@
 #include "msm-pm8953-rpm-regulator.dtsi"
 #include "msm-pm8953.dtsi"
 #include "msm8953-regulator.dtsi"
-#include "msm-pmi8950.dtsi"
-#include "msm-audio.dtsi"
-#include "msm8953-audio.dtsi"
+/* #include "msm-pmi8950.dtsi" */
+/* #include "msm-audio.dtsi" */
+/* #include "msm8953-audio.dtsi" */
 #include "msm-gdsc-8916.dtsi"
 #include "msm8953-camera.dtsi"
 #include "msm8953-mdss.dtsi"

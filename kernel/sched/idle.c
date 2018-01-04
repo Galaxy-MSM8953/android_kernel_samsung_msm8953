@@ -16,6 +16,11 @@
 
 static int __read_mostly cpu_idle_force_poll;
 
+#ifdef CONFIG_SW_SELF_DISCHARGING
+bool sdchg_idle_policy_set;
+unsigned int sdchg_idle_poll_mask;
+#endif
+
 void cpu_idle_poll_ctrl(bool enable)
 {
 	if (enable) {
@@ -188,6 +193,10 @@ exit_idle:
  */
 static void cpu_idle_loop(void)
 {
+#ifdef CONFIG_SW_SELF_DISCHARGING
+	bool sdchg_cpu_idle_force_poll = false;
+#endif
+
 	while (1) {
 		/*
 		 * If the arch has a polling bit, we maintain an invariant:
@@ -212,6 +221,13 @@ static void cpu_idle_loop(void)
 			local_irq_disable();
 			arch_cpu_idle_enter();
 
+#ifdef CONFIG_SW_SELF_DISCHARGING
+			if (unlikely(sdchg_idle_policy_set && 
+				(sdchg_idle_poll_mask & (1 << raw_smp_processor_id()))))
+				sdchg_cpu_idle_force_poll = true;
+			else
+				sdchg_cpu_idle_force_poll = false;
+#endif
 			/*
 			 * In poll mode we reenable interrupts and spin.
 			 *
@@ -221,7 +237,11 @@ static void cpu_idle_loop(void)
 			 * know that the IPI is going to arrive right
 			 * away
 			 */
+#ifdef CONFIG_SW_SELF_DISCHARGING
+			if (cpu_idle_force_poll || tick_check_broadcast_expired() || sdchg_cpu_idle_force_poll)
+#else
 			if (cpu_idle_force_poll || tick_check_broadcast_expired())
+#endif
 				cpu_idle_poll();
 			else
 				cpuidle_idle_call();

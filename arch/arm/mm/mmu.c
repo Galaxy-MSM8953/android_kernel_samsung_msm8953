@@ -707,10 +707,35 @@ static void __init *early_alloc(unsigned long sz)
 	return early_alloc_aligned(sz, sz);
 }
 
-static pte_t * __init early_pte_alloc(pmd_t *pmd, unsigned long addr, unsigned long prot)
+static bool in_map_lowmem __initdata;
+
+static void __init *early_alloc_max_addr(unsigned long sz, phys_addr_t maddr)
+{
+	void *ptr;
+
+	if (maddr == MEMBLOCK_ALLOC_ACCESSIBLE)
+		return early_alloc_aligned(sz, sz);
+
+	ptr = __va(memblock_alloc_base(sz, sz, maddr));
+	memset(ptr, 0, sz);
+	return ptr;
+}
+
+static pte_t * __init early_pte_alloc(pmd_t *pmd, unsigned long addr,
+				unsigned long end, unsigned long prot)
 {
 	if (pmd_none(*pmd)) {
-		pte_t *pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
+		pte_t *pte;
+		phys_addr_t maddr = MEMBLOCK_ALLOC_ACCESSIBLE;
+
+		if (in_map_lowmem && (end & SECTION_MASK)) {
+			end &= PGDIR_MASK;
+			BUG_ON(!end);
+			maddr = __virt_to_phys(end);
+		}
+		pte = early_alloc_max_addr(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE,
+					maddr);
+
 		__pmd_populate(pmd, __pa(pte), prot);
 	}
 	BUG_ON(pmd_bad(*pmd));
@@ -721,7 +746,8 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 				  unsigned long end, unsigned long pfn,
 				  const struct mem_type *type)
 {
-	pte_t *pte = early_pte_alloc(pmd, addr, type->prot_l1);
+
+	pte_t *pte = early_pte_alloc(pmd, addr, end, type->prot_l1);
 	do {
 		set_pte_ext(pte, pfn_pte(pfn, __pgprot(type->prot_pte)), 0);
 		pfn++;
@@ -1365,11 +1391,11 @@ static void __init kmap_init(void)
 {
 #ifdef CONFIG_HIGHMEM
 	pkmap_page_table = early_pte_alloc(pmd_off_k(PKMAP_BASE),
-		PKMAP_BASE, _PAGE_KERNEL_TABLE);
+		PKMAP_BASE, 0, _PAGE_KERNEL_TABLE);
 #endif
 
 	early_pte_alloc(pmd_off_k(FIXADDR_START), FIXADDR_START,
-			_PAGE_KERNEL_TABLE);
+			0, _PAGE_KERNEL_TABLE);
 }
 
 static void __init map_lowmem(void)
@@ -1385,6 +1411,7 @@ static void __init map_lowmem(void)
 	unsigned long length;
 	unsigned int type;
 	int nr = 0;
+	in_map_lowmem = 1;
 
 	/* Map all the lowmem memory banks. */
 	for_each_memblock(memory, reg) {
@@ -1440,6 +1467,7 @@ static void __init map_lowmem(void)
 			}
 		}
 	}
+	in_map_lowmem = 0;
 	svm = early_alloc_aligned(sizeof(*svm) * nr, __alignof__(*svm));
 
 	for_each_memblock(memory, reg) {

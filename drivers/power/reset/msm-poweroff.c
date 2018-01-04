@@ -33,6 +33,8 @@
 #include <soc/qcom/restart.h>
 #include <soc/qcom/watchdog.h>
 
+#include <linux/sec_debug.h>
+
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
 #define EMERGENCY_DLOAD_MAGIC3    0x77777777
@@ -129,7 +131,7 @@ int scm_set_dload_mode(int arg1, int arg2)
 				&desc);
 }
 
-static void set_dload_mode(int on)
+void set_dload_mode(int on)
 {
 	int ret;
 
@@ -145,6 +147,10 @@ static void set_dload_mode(int on)
 		pr_err("Failed to set secure DLOAD mode: %d\n", ret);
 
 	dload_mode_enabled = on;
+
+#ifdef CONFIG_SEC_DEBUG
+	pr_err("set_dload_mode <%d> ( %lx )\n", on, CALLER_ADDR0);
+#endif
 }
 
 static bool get_dload_mode(void)
@@ -268,6 +274,7 @@ static void msm_restart_prepare(const char *cmd)
 {
 	bool need_warm_reset = false;
 
+#ifndef CONFIG_SEC_DEBUG
 #ifdef CONFIG_MSM_DLOAD_MODE
 
 	/* Write download mode flags if we're panic'ing
@@ -278,6 +285,9 @@ static void msm_restart_prepare(const char *cmd)
 	set_dload_mode(download_mode &&
 			(in_panic || restart_mode == RESTART_DLOAD));
 #endif
+#else /* CONFIG_SEC_DEBUG */
+	sec_debug_update_dload_mode(restart_mode, in_panic);
+#endif /* CONFIG_SEC_DEBUG */
 
 	if (qpnp_pon_check_hard_reset_stored()) {
 		/* Set warm reset as true when device is in dload mode */
@@ -336,6 +346,8 @@ static void msm_restart_prepare(const char *cmd)
 		}
 	}
 
+	sec_debug_update_restart_reason(cmd, in_panic);
+
 	flush_cache_all();
 
 	/*outer_flush_all is not supported by 64bit kernel*/
@@ -374,6 +386,7 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 	pr_notice("Going down for restart now\n");
 
 	msm_restart_prepare(cmd);
+	pr_info("%s: end of msm_restart_pareare\n",__func__);
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 	/*
@@ -381,8 +394,10 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 	 * device will take the usual restart path.
 	 */
 
-	if (WDOG_BITE_ON_PANIC && in_panic)
+	if (WDOG_BITE_ON_PANIC && in_panic) {
+		printk(KERN_NOTICE " WDOG_BITE_ON_PANIC : %d, in_panic : %d\n", WDOG_BITE_ON_PANIC, in_panic);
 		msm_trigger_wdog_bite();
+	}
 #endif
 
 	scm_disable_sdi();

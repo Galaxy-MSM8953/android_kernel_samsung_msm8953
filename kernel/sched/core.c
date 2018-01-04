@@ -78,6 +78,10 @@
 #include <linux/syscore_ops.h>
 #include <linux/list_sort.h>
 
+#ifdef CONFIG_SEC_ADAPTIVE_LOAD_TRACKING
+#include <linux/sched/sysctl.h>
+#endif
+
 #include <asm/switch_to.h>
 #include <asm/tlb.h>
 #include <asm/irq_regs.h>
@@ -88,6 +92,8 @@
 #ifdef CONFIG_MSM_APP_SETTINGS
 #include <asm/app_api.h>
 #endif
+
+#include <linux/sec_debug.h>
 
 #include "sched.h"
 #include "../workqueue_internal.h"
@@ -1685,8 +1691,13 @@ int register_cpu_cycle_counter_cb(struct cpu_cycle_counter_cb *cb)
  */
 #define EARLY_DETECTION_DURATION 9500000
 
+#ifdef CONFIG_SEC_ADAPTIVE_LOAD_TRACKING
+static __read_mostly unsigned int sched_ravg_hist_size = 3;
+__read_mostly unsigned int sysctl_sched_ravg_hist_size = 3;
+#else
 static __read_mostly unsigned int sched_ravg_hist_size = 5;
 __read_mostly unsigned int sysctl_sched_ravg_hist_size = 5;
+#endif
 
 static __read_mostly unsigned int sched_window_stats_policy =
 	 WINDOW_STATS_MAX_RECENT_AVG;
@@ -2799,7 +2810,9 @@ static void update_history(struct rq *rq, struct task_struct *p,
 	int ridx, widx;
 	u32 max = 0, avg, demand, pred_demand;
 	u64 sum = 0;
-
+#ifdef CONFIG_SEC_ADAPTIVE_LOAD_TRACKING
+	u32 global_avg;
+#endif
 	/* Ignore windows where task had no activity */
 	if (!runtime || is_idle_task(p) || exiting_task(p) || !samples)
 			goto done;
@@ -2823,6 +2836,25 @@ static void update_history(struct rq *rq, struct task_struct *p,
 
 	p->ravg.sum = 0;
 
+#ifdef CONFIG_SEC_ADAPTIVE_LOAD_TRACKING
+	avg = div64_u64(sum, sched_ravg_hist_size);
+	global_avg = div64_u64(p->ravg.global_average, p->ravg.nr_global_average);
+	if(avg > sysctl_sched_peak_detection_pct*global_avg){
+		demand = avg;
+	}
+	else{
+		demand = global_avg;
+		p->ravg.global_average += hist[sched_ravg_hist_size-1];
+		p->ravg.nr_global_average++;
+
+		/* Handle wrap around scenario */
+  		if(p->ravg.global_average == 0){ 
+  			p->ravg.global_average = global_avg; 
+  			p->ravg.nr_global_average = 1; 
+  		} 
+
+	}
+#else
 	if (sched_window_stats_policy == WINDOW_STATS_RECENT) {
 		demand = runtime;
 	} else if (sched_window_stats_policy == WINDOW_STATS_MAX) {
@@ -2834,6 +2866,7 @@ static void update_history(struct rq *rq, struct task_struct *p,
 		else
 			demand = max(avg, runtime);
 	}
+#endif
 	pred_demand = predict_and_update_buckets(rq, p, runtime);
 
 	/*
@@ -5753,8 +5786,10 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	       struct task_struct *next)
 {
 	struct mm_struct *mm, *oldmm;
+	int cpu = smp_processor_id();
 
 	prepare_task_switch(rq, prev, next);
+	sec_debug_task_sched_log(cpu, next, prev);
 
 	mm = next->mm;
 	oldmm = prev->active_mm;
@@ -10552,6 +10587,9 @@ void __init sched_init(void)
 {
 	int i, j;
 	unsigned long alloc_size = 0, ptr;
+
+	sec_gaf_supply_rqinfo(offsetof(struct rq, curr),
+			offsetof(struct cfs_rq, rq));
 
 	if (sched_enable_hmp)
 		pr_info("HMP scheduling enabled.\n");

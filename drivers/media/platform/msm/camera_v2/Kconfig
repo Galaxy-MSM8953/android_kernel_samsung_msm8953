@@ -95,6 +95,11 @@ config MSM_EEPROM
           and also provides support for writing data in case of FLASH ROM.
 	  Currently supports I2C, CCI and SPI protocol
 
+config MSM_FRONT_EEPROM
+        bool "Qualcomm MSM Front Camera ROM Interface for Calibration support"
+        ---help---
+          Enables reading of Front sensor calibration data from EEP.
+
 config MSM_ISPIF
         bool "Qualcomm MSM Image Signal Processing interface support"
         depends on MSMB_CAMERA
@@ -194,6 +199,12 @@ config s5k4e1
 		and QSXGA snapshot at 15 fps.
 		This sensor driver does not support auto focus.
 
+config S5K5E3YX
+	bool "Sensor s5k5e3yx (BAYER 5MP)"
+	depends on MSMB_CAMERA
+	---help---
+		Samsung 5 MP Bayer Sensor. It uses 2 mipi lanes,
+		
 config OV12830
 	bool "OmniVision OV12830 (BAYER 12MP)"
 	depends on MSMB_CAMERA
@@ -241,3 +252,21 @@ config MSM_JPEGDMA
         select V4L2_MEM2MEM_DEV
 	---help---
 	  Enable support for Jpeg dma engine.
+
+config GET_REAR_MODULE_ID
+	tristate "Rear Camera Module ID from 0xAE"
+        depends on MSMB_CAMERA
+	---help---
+	  Enable support to get module ID 10byte from eeprom 0xAE then set to sys_class_camera_rear_moduleid
+
+config GET_FRONT_MODULE_ID
+	tristate "Front Camera Module ID from 0xAE"
+        depends on MSMB_CAMERA
+	---help---
+	  Enable support to get module ID 10byte from eeprom 0xAE then set to sys_class_camera_front_moduleid
+
+config LEDS_SM5705
+	tristate "Siliconmitus SM5703 flash LED driver"
+		depends on MSMB_CAMERA
+	---help---
+	  A driver for Siliconmitus SM5705 flash LED	  
