@@ -754,12 +754,13 @@ struct mdss_panel_info {
 
 	/* debugfs structure for the panel */
 	struct mdss_panel_debugfs_info *debugfs_info;
-#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
-	int panel_state;
-#endif
 
 	/* HDR properties of display panel*/
 	struct mdss_panel_hdr_properties hdr_properties;
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	int panel_state;
+#endif
 };
 
 struct mdss_panel_timing {

@@ -213,7 +213,6 @@ static ssize_t panel_debug_base_reg_read(struct file *file,
 	struct mdss_panel_data *panel_data = ctl->panel_data;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = container_of(panel_data,
 					struct mdss_dsi_ctrl_pdata, panel_data);
-	int rc = -EFAULT;
 
 	if (!dbg)
 		return -ENODEV;
@@ -281,7 +280,7 @@ read_reg_fail:
 	kfree(rx_buf);
 	kfree(panel_reg_buf);
 	mutex_unlock(&mdss_debug_lock);
-	return rc;
+	return -EFAULT;
 }
 
 static const struct file_operations panel_off_fops = {
@@ -512,6 +511,11 @@ static ssize_t mdss_debug_base_reg_read(struct file *file,
 	size_t len;
 
 	if (!dbg || !mdata) {
+		pr_err("invalid handle\n");
+		return -ENODEV;
+	}
+
+	if (!dbg->base) {
 		pr_err("invalid handle\n");
 		return -ENODEV;
 	}

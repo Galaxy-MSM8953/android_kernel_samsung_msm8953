@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1957,6 +1957,7 @@ static int mdss_mdp_cmd_wait4pingpong(struct mdss_mdp_ctl *ctl, void *arg)
 		if (!rc) {
 			MDSS_XLOG(0xbac);
 			mdss_fb_report_panel_dead(ctl->mfd);
+		} else if (ctx->pp_timeout_report_cnt == 0) {
 #if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
 			if (vdd->debug_data->panic_on_pptimeout) {
 				WARN(1, "cmd kickoff timed out (%d) ctl=%d\n", rc, ctl->num);

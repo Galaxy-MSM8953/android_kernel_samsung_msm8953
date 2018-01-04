@@ -119,9 +119,9 @@ static unsigned int __do_compat_ioctl_nr(unsigned int cmd32)
 static void  __copy_atomic_commit_struct(struct mdp_layer_commit  *commit,
 	struct mdp_layer_commit32 *commit32)
 {
-	unsigned int destsize = sizeof(commit->commit_v1.reserved);
-	unsigned int srcsize = sizeof(commit32->commit_v1.reserved);
-	unsigned int count = (destsize <= srcsize ? destsize : srcsize);
+	unsigned int destSize = sizeof(commit->commit_v1.reserved);
+	unsigned int srcSize = sizeof(commit32->commit_v1.reserved);
+	unsigned int count = (destSize <= srcSize ? destSize : srcSize);
 	commit->version = commit32->version;
 	commit->commit_v1.flags = commit32->commit_v1.flags;
 	commit->commit_v1.input_layer_cnt =
@@ -2960,7 +2960,7 @@ static int mdss_compat_pp_ioctl(struct fb_info *info, unsigned int cmd,
 	uint32_t op;
 	int ret = 0;
 	struct msmfb_mdp_pp32 __user *pp32;
-	struct msmfb_mdp_pp __user *pp = NULL;
+	struct msmfb_mdp_pp __user *pp;
 
 	pp32 = compat_ptr(arg);
 	if (copy_from_user(&op, &pp32->op, sizeof(uint32_t)))

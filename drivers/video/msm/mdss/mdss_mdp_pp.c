@@ -4681,7 +4681,7 @@ gamut_clk_off:
 			}
 		}
 		if (pp_gm_has_invalid_lut_size(config)) {
-			pr_err("invalid lut size for gamut\n");
+			pr_debug("invalid lut size for gamut\n");
 			ret = -EINVAL;
 			goto gamut_config_exit;
 		}
@@ -5199,7 +5199,7 @@ int mdss_mdp_hist_collect(struct mdp_histogram_data *hist)
 	u32 exp_sum = 0;
 	struct mdss_mdp_pipe *pipe;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
-	unsigned long flag = 0;
+	unsigned long flag;
 
 	if (mdata->mdp_rev < MDSS_MDP_HW_REV_103) {
 		pr_err("Unsupported mdp rev %d\n", mdata->mdp_rev);
