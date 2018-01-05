@@ -31,7 +31,7 @@
 #include "msm.h"
 #include "msm_buf_mgr.h"
 #include "cam_smmu_api.h"
-#include "../include/media/msm_camera.h"
+#include "../include/uapi/media/msm_camera.h"
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
