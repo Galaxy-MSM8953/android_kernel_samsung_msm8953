@@ -426,7 +426,8 @@ static ssize_t voice_svc_write(struct file *file, const char __user *buf,
 				ret = -EINVAL;
 				goto done;
 			}
-			ret = process_reg_cmd(register_data, prtd);
+			ret = process_reg_cmd(
+			(struct voice_svc_register *)data->payload, prtd);
 			if (!ret)
 				ret = count;
 		} else {
@@ -459,7 +460,8 @@ static ssize_t voice_svc_write(struct file *file, const char __user *buf,
 			if (count >= (sizeof(struct voice_svc_write_msg) +
 				      sizeof(struct voice_svc_cmd_request) +
 				      request_payload_size)) {
-				ret = voice_svc_send_req(request_data, prtd);
+				ret = voice_svc_send_req(
+					(struct voice_svc_cmd_request *)data->payload, prtd);
 				if (!ret)
 					ret = count;
 			} else {
