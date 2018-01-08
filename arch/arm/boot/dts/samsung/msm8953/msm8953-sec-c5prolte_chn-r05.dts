@@ -13,7 +13,7 @@
 
 /dts-v1/;
 
-#include "../../qcom/msm8953.dtsi"
+#include "../../qcom/msm8953-sec.dtsi"
 #include "msm-sec-audio.dtsi"
 #include "msm8953-sec-common.dtsi"
 #include "msm8953-sec-c5prolte_chn-pinctrl-r05.dtsi"
