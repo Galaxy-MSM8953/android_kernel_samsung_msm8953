@@ -51,6 +51,10 @@
 #include <linux/platform_data/qcom-serial_hs_lite.h>
 #include <linux/msm-bus.h>
 #include "msm_serial_hs_hwreg.h"
+#ifdef CONFIG_SEC_BSP
+#include <linux/slab.h>
+#include <linux/ipc_logging.h>
+#endif
 
 /*
  * There are 3 different kind of UART Core available on MSM.
@@ -71,6 +75,69 @@ enum uart_func_mode {
 	UART_TWO_WIRE, /* can't support HW Flow control. */
 	UART_FOUR_WIRE,/* can support HW Flow control. */
 };
+
+#if CONFIG_SEC_BSP
+enum {
+	DIR_RX,
+	DIR_TX,
+	DIR_NUM
+};
+
+enum {
+	SUM_IDX,
+	MIN_IDX,
+	MAX_IDX,
+	NUM_IDX
+};
+
+typedef struct {
+	u64 call_nsec;
+	u64 elapsed_usec;
+	u32 cpu;
+	unsigned int rx_misr;
+	unsigned int old_snap_state;
+	unsigned int count;
+	struct uart_icount icount;
+} irq_info_t;
+
+typedef struct {
+	/* every irq */
+	u32 total_irq;
+	u32 cpu_irq[NR_CPUS];
+	u64 cpu_num_data[NR_CPUS];
+	u64 elapsed_usec[NUM_IDX];
+	u64 irq_gap[NUM_IDX];
+
+	/* new trans start ~ next trans start */
+	u32 num_trans;
+	u64 trans_gap[NUM_IDX];
+	u64 trans_data[NUM_IDX];
+
+	/* the first level ~ stale */
+	u32 num_inner_trans;
+	u64 trans_inner_gap[NUM_IDX];
+} statistic_t;
+
+typedef struct {
+	int size;
+	int head;
+	int tail;
+	int skip;
+	char *data;
+} buf_t;
+
+typedef struct {
+	irq_info_t irq_info;
+	statistic_t stat;
+	buf_t buf;
+} debug_info_t;
+
+typedef struct {
+	unsigned int baud_rate;
+	debug_info_t info[DIR_NUM];
+	void *ipc_log;
+} debug_hsl_t;
+#endif
 
 struct msm_hsl_port {
 	struct uart_port	uart;
@@ -93,6 +160,10 @@ struct msm_hsl_port {
 	u32			bus_perf_client;
 	/* BLSP UART required BUS Scaling data */
 	struct msm_bus_scale_pdata *bus_scale_table;
+#ifdef CONFIG_SEC_BSP
+	debug_hsl_t debug_hsl;
+	struct work_struct work;
+#endif
 };
 
 #define UARTDM_VERSION_11_13	0
@@ -101,6 +172,44 @@ struct msm_hsl_port {
 #define UART_TO_MSM(uart_port)	((struct msm_hsl_port *) uart_port)
 #define is_console(port)	((port)->cons && \
 				(port)->cons->index == (port)->line)
+
+#ifdef CONFIG_SEC_BSP
+#ifdef CONFIG_SEC_FACTORY
+#define SERIAL_HSL_LOG_PAGES (200)
+#else
+#define SERIAL_HSL_LOG_PAGES (10)
+#endif
+
+#define KLOG_MASK_SHIFT (0)
+#define IPCLOG_MASK_SHIFT (1)
+
+#define KLOG_MASK (1 << KLOG_MASK_SHIFT)
+#define IPCLOG_MASK (1 << IPCLOG_MASK_SHIFT)
+
+typedef struct {
+	unsigned int log_mask;
+	unsigned int rx_buf_size;	/* can NOT be changed after init */
+	unsigned int tx_buf_size;	/* can NOT be changed after init */
+	unsigned int enabled;
+} serial_hsl_log_t;
+
+static serial_hsl_log_t serial_hsl_log = {
+	.log_mask = IPCLOG_MASK,
+	.rx_buf_size = 512,
+	.tx_buf_size = 512,
+	.enabled = 1,
+};
+
+module_param_named(log_mask, serial_hsl_log.log_mask, uint,
+		S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+module_param_named(rx_buf_size, serial_hsl_log.rx_buf_size, uint,
+		S_IRUSR | S_IRGRP | S_IROTH);
+module_param_named(tx_buf_size, serial_hsl_log.tx_buf_size, uint,
+		S_IRUSR | S_IRGRP | S_IROTH);
+module_param_named(enable, serial_hsl_log.enabled, uint,
+		S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+#endif /* CONFIG_SEC_BSP */
+
 
 static const unsigned int regmap[][UARTDM_LAST] = {
 	[UARTDM_VERSION_11_13] = {
@@ -548,6 +657,473 @@ static void msm_hsl_enable_ms(struct uart_port *port)
 		regmap[msm_hsl_port->ver_id][UARTDM_IMR]);
 }
 
+#ifdef CONFIG_SEC_BSP
+#define MAX_HSL_DEBUG_INFO_LEN (200)
+static char debug_str[MAX_HSL_DEBUG_INFO_LEN];
+
+static void print_debug_stat(struct msm_hsl_port *msm_hsl_port, int dir)
+{
+	void *ipc_log = msm_hsl_port->debug_hsl.ipc_log;
+	statistic_t *stat = &msm_hsl_port->debug_hsl.info[dir].stat;
+	int length = 0, i;
+
+	if (dir != DIR_RX )
+		return;
+
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\n1. IRQ STAT\n\t%u times occurred\n", stat->total_irq);
+
+#ifdef __aarch64__
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\telapse\tAvg(%llu) Min(%llu) Max(%llu)\n\t",
+			stat->total_irq ?
+			(stat->elapsed_usec[SUM_IDX] / stat->total_irq) : stat->elapsed_usec[SUM_IDX],
+			stat->elapsed_usec[MIN_IDX], stat->elapsed_usec[MAX_IDX]);
+#else
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\telapse\tAvg(%llu) Min(%llu) Max(%llu)\n\t",
+			stat->total_irq ?
+			(stat->elapsed_usec[SUM_IDX]) : stat->elapsed_usec[SUM_IDX],
+			stat->elapsed_usec[MIN_IDX], stat->elapsed_usec[MAX_IDX]);
+#endif
+
+	for (i = 0; i < NR_CPUS; i++) {
+		length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\tCPU%d", i);
+	}
+
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\n\tirq");
+
+	for (i = 0; i < NR_CPUS; i++) {
+		length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\t%d", stat->cpu_irq[i]);
+	}
+
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\n\tdata");
+
+	for (i = 0; i < NR_CPUS; i++) {
+		length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\t%llu", stat->cpu_num_data[i]);
+	}
+
+	if (serial_hsl_log.log_mask & KLOG_MASK)
+		pr_info("%s", debug_str);
+	if (serial_hsl_log.log_mask & IPCLOG_MASK) {
+		if (msm_hsl_port && ipc_log) {
+			ipc_log_string(ipc_log, "%s", debug_str);
+		}
+	}
+	length = 0;
+
+#ifdef __aarch64__
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\n2. Trans STAT\n\t%u/%u times occurred\n",
+			stat->num_inner_trans, stat->num_trans);
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\tGap from prev\tAvg(%llu) Min(%llu) Max(%llu)\n",
+			stat->num_trans > 1 ?
+			(stat->trans_gap[SUM_IDX] / (stat->num_trans -1)) : stat->trans_gap[SUM_IDX],
+			stat->trans_gap[MIN_IDX], stat->trans_gap[MAX_IDX]);
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\tGap internal\tAvg(%llu) Min(%llu) Max(%llu)\n",
+			stat->num_inner_trans ?
+			(stat->trans_inner_gap[SUM_IDX]/stat->num_inner_trans) : stat->trans_inner_gap[SUM_IDX],
+			stat->trans_inner_gap[MIN_IDX], stat->trans_inner_gap[MAX_IDX]);
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\t#data\tAvg(%llu) Min(%llu) Max(%llu)\n",
+			stat->num_trans ?
+			(stat->trans_data[SUM_IDX]/stat->num_trans) : stat->trans_data[SUM_IDX],
+			stat->trans_data[MIN_IDX], stat->trans_data[MAX_IDX]);
+#else
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\n2. Trans STAT\n\t%u/%u times occurred\n",
+			stat->num_inner_trans, stat->num_trans);
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\tGap from prev\tAvg(%llu) Min(%llu) Max(%llu)\n",
+			stat->num_trans > 1 ?
+			(stat->trans_gap[SUM_IDX]) : stat->trans_gap[SUM_IDX],
+			stat->trans_gap[MIN_IDX], stat->trans_gap[MAX_IDX]);
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\tGap internal\tAvg(%llu) Min(%llu) Max(%llu)\n",
+			stat->num_inner_trans ?
+			(stat->trans_inner_gap[SUM_IDX]) : stat->trans_inner_gap[SUM_IDX],
+			stat->trans_inner_gap[MIN_IDX], stat->trans_inner_gap[MAX_IDX]);
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\t#data\tAvg(%llu) Min(%llu) Max(%llu)\n",
+			stat->num_trans ?
+			(stat->trans_data[SUM_IDX]) : stat->trans_data[SUM_IDX],
+			stat->trans_data[MIN_IDX], stat->trans_data[MAX_IDX]);
+#endif
+	if (serial_hsl_log.log_mask & KLOG_MASK)
+		pr_info("%s", debug_str);
+	if (serial_hsl_log.log_mask & IPCLOG_MASK) {
+		if (msm_hsl_port && ipc_log) {
+			ipc_log_string(ipc_log, "%s", debug_str);
+		}
+	}
+}
+
+static void print_debug_info(struct msm_hsl_port *msm_hsl_port, int dir)
+{
+	void *ipc_log = msm_hsl_port->debug_hsl.ipc_log;
+	irq_info_t *info = &msm_hsl_port->debug_hsl.info[dir].irq_info;
+	buf_t *buf = &msm_hsl_port->debug_hsl.info[dir].buf;
+	int length = 0;
+	u64 call_nsec = info->call_nsec;
+	u32 rem_nsec = do_div(call_nsec, 1000000000);
+
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"%s UART+ baud(%u) cpu%u calltime %5llu.%06u, %lld usec elapsed\n",
+			(dir == DIR_RX) ? "RX" : "TX", msm_hsl_port->debug_hsl.baud_rate,
+			info->cpu,
+			call_nsec, rem_nsec / 1000, info->elapsed_usec);
+
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\t%s, %u chars(%u), dbgskip(%d)\n",
+			(dir == DIR_RX)
+				? ((info->rx_misr & UARTDM_ISR_RXSTALE_BMSK) ? "Rx(STALE)" : "Rx(LEVEL)")
+				: "Tx",
+			info->count, info->old_snap_state, buf->skip);
+
+	length += snprintf(debug_str + length, MAX_HSL_DEBUG_INFO_LEN - length,
+			"\tOR(%u), BRK(%u), FR(%u), RX(%u), TX(%u)\n",
+			info->icount.overrun, info->icount.brk,
+			info->icount.frame, info->icount.rx, info->icount.tx);
+
+	if (serial_hsl_log.log_mask & KLOG_MASK)
+		pr_info("%s", debug_str);
+	if (serial_hsl_log.log_mask & IPCLOG_MASK) {
+		if (msm_hsl_port && ipc_log) {
+			ipc_log_string(ipc_log, "%s", debug_str);
+		}
+	}
+}
+
+static void print_debug_data(struct uart_port *port, const char *level, const char *prefix_str, int prefix_type,
+		    int rowsize, int groupsize,
+		    const void *buf, size_t len, bool ascii)
+{
+	const u8 *ptr = buf;
+	int i, linelen, remaining = 0;
+	unsigned char linebuf[32 * 3 + 2 + 32 + 1];
+	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+	void *ipc_log = msm_hsl_port->debug_hsl.ipc_log;
+
+	if (!serial_hsl_log.enabled)
+		return;
+
+	remaining = len;
+
+	if (rowsize != 16 && rowsize != 32)
+		rowsize = 16;
+
+	for (i = 0; i < len; i += rowsize) {
+		linelen = min(remaining, rowsize);
+		remaining -= rowsize;
+
+		hex_dump_to_buffer(ptr + i, linelen, rowsize, groupsize,
+				   linebuf, sizeof(linebuf), ascii);
+
+		switch (prefix_type) {
+		case DUMP_PREFIX_ADDRESS:
+			if (serial_hsl_log.log_mask & KLOG_MASK)
+				printk("%s%s%p: %s\n",
+				       level, prefix_str, ptr + i, linebuf);
+			if (serial_hsl_log.log_mask & IPCLOG_MASK) {
+				if (ipc_log) {
+					ipc_log_string(ipc_log, "%s%p: %s\n",
+						prefix_str, ptr + i, linebuf);
+				}
+			}
+			break;
+		case DUMP_PREFIX_OFFSET:
+			if (serial_hsl_log.log_mask & KLOG_MASK)
+				printk("%s%s%.8x: %s\n", level, prefix_str, i, linebuf);
+			if (serial_hsl_log.log_mask & IPCLOG_MASK) {
+				if (ipc_log) {
+					ipc_log_string(ipc_log, "%s%.8x: %s\n",
+						prefix_str, i, linebuf);
+				}
+			}
+			break;
+		default:
+			if (serial_hsl_log.log_mask & KLOG_MASK)
+				printk("%s%s%s\n", level, prefix_str, linebuf);
+			if (serial_hsl_log.log_mask & IPCLOG_MASK) {
+				if (ipc_log) {
+					ipc_log_string(ipc_log, "%s%s\n",
+						prefix_str, linebuf);
+				}
+			}
+			break;
+		}
+	}
+}
+
+static void sec_debug_hsl_print_work(struct work_struct *work)
+{
+	struct msm_hsl_port *msm_hsl_port = container_of(work, struct msm_hsl_port, work);
+	buf_t *buf;
+	char temp_data[16], *ptr;
+	char str[10] = {0,};
+	int dir, remain, count;
+
+	for (dir = 0; dir < ARRAY_SIZE(msm_hsl_port->debug_hsl.info); dir++) {
+		buf = &msm_hsl_port->debug_hsl.info[dir].buf;
+
+		if (!buf->data) {
+			print_debug_info(msm_hsl_port, dir);
+			print_debug_stat(msm_hsl_port, dir);
+			continue;
+		}
+
+		remain = CIRC_CNT(buf->head, buf->tail, buf->size);
+		if (remain <= 0)
+			continue;
+
+		print_debug_info(msm_hsl_port, dir);
+		print_debug_stat(msm_hsl_port, dir);
+
+		snprintf(str, sizeof(str), "%s UART: ", (dir == DIR_RX) ? "RX" : "TX");
+
+		while (remain > 0) {
+			count = CIRC_CNT_TO_END(buf->head, buf->tail, buf->size);
+			count = min(remain, count);
+
+			if (count < sizeof(temp_data)) {
+				memcpy(temp_data, &buf->data[buf->tail], count);
+				if (remain >= sizeof(temp_data)) {
+					memcpy(temp_data + count, &buf->data[0], sizeof(temp_data) - count);
+					count = sizeof(temp_data);
+				}
+				ptr = temp_data;
+			} else {
+				ptr = &buf->data[buf->tail];
+				count = (count >> 4) << 4;
+			}
+
+			print_debug_data(&msm_hsl_port->uart, KERN_DEBUG, str,
+				DUMP_PREFIX_NONE, 16, 1, ptr, count, 1);
+
+			buf->tail = (buf->tail + count) & (buf->size -1);
+
+			remain -= count;
+		}
+	}
+}
+
+static void sec_debug_hsl_print_data(struct work_struct *work)
+{
+	if (serial_hsl_log.enabled)
+		schedule_work(work);
+}
+
+static ktime_t sec_debug_hsl_start(struct msm_hsl_port *msm_hsl_port, int dir)
+{
+	ktime_t calltime = ktime_set(0, 0);
+
+	if (!serial_hsl_log.enabled)
+		return calltime;
+
+	calltime = ktime_get();
+	msm_hsl_port->debug_hsl.info[dir].irq_info.call_nsec = local_clock();
+
+	return calltime;
+}
+
+static void sec_debug_hsl_report_stat(struct uart_port *port, int dir,
+		unsigned int misr, int count)
+{
+	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+	irq_info_t *info = &msm_hsl_port->debug_hsl.info[dir].irq_info;
+	statistic_t *stat = &msm_hsl_port->debug_hsl.info[dir].stat;
+	static u64 acc_num[DIR_NUM] = {0,};
+	static u64 trans_start_nsec[DIR_NUM] = {0,}, last_call_nsec[DIR_NUM] = {0,};
+	u64 temp_gap;
+
+	if (dir != DIR_RX)
+		return;
+
+	stat->total_irq++;
+	stat->cpu_irq[info->cpu]++;
+	stat->cpu_num_data[info->cpu] += info->count;
+
+	stat->elapsed_usec[SUM_IDX] += info->elapsed_usec;
+	if (unlikely(stat->elapsed_usec[MIN_IDX] == 0))
+		stat->elapsed_usec[MIN_IDX] = info->elapsed_usec;
+	else
+		stat->elapsed_usec[MIN_IDX]
+		 = min(stat->elapsed_usec[MIN_IDX], info->elapsed_usec);
+
+	stat->elapsed_usec[MAX_IDX]
+		 = max(stat->elapsed_usec[MAX_IDX], info->elapsed_usec);
+
+	if (acc_num[dir] == 0) {
+		stat->num_trans++;
+		if (likely(trans_start_nsec[dir])) {
+			temp_gap = (info->call_nsec - trans_start_nsec[dir]);
+			stat->trans_gap[SUM_IDX] += temp_gap;
+			if (unlikely(stat->trans_gap[MIN_IDX] == 0))
+				stat->trans_gap[MIN_IDX] = temp_gap;
+			else
+				stat->trans_gap[MIN_IDX]
+				 = min(stat->trans_gap[MIN_IDX], temp_gap);
+
+			stat->trans_gap[MAX_IDX]
+				 = max(stat->trans_gap[MAX_IDX], temp_gap);
+		}
+		trans_start_nsec[dir] = last_call_nsec[dir] = info->call_nsec;
+	} else {
+		stat->num_inner_trans++;
+		temp_gap = (info->call_nsec - last_call_nsec[dir]);
+		stat->trans_inner_gap[SUM_IDX] += temp_gap;
+		if (unlikely(stat->trans_inner_gap[MIN_IDX] == 0))
+			stat->trans_inner_gap[MIN_IDX] = temp_gap;
+		else
+			stat->trans_inner_gap[MIN_IDX]
+			 	= min(stat->trans_inner_gap[MIN_IDX], temp_gap);
+
+		stat->trans_inner_gap[MAX_IDX]
+			 = max(stat->trans_inner_gap[MAX_IDX], temp_gap);
+		last_call_nsec[dir] = info->call_nsec;
+	}
+
+	acc_num[dir] += count;
+
+	if (misr & UARTDM_ISR_RXSTALE_BMSK) {
+		stat->trans_data[SUM_IDX] += acc_num[dir];
+		if(unlikely(stat->trans_data[MIN_IDX] == 0))
+			stat->trans_data[MIN_IDX] = acc_num[dir];
+		else
+			stat->trans_data[MIN_IDX]
+			 = min(stat->trans_data[MIN_IDX], acc_num[dir]);
+
+		stat->trans_data[MAX_IDX]
+			 = max(stat->trans_data[MAX_IDX], acc_num[dir]);
+		acc_num[dir] = 0;
+	}
+}
+
+static void sec_debug_hsl_report(struct uart_port *port, int dir, ktime_t calltime,
+		unsigned int misr, int count)
+{
+	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+	irq_info_t *info = &msm_hsl_port->debug_hsl.info[dir].irq_info;
+	ktime_t rettime = ktime_get();
+
+	if (!serial_hsl_log.enabled)
+		return;
+
+	info->elapsed_usec = ((u64)ktime_to_ns(ktime_sub(rettime, calltime))) >> 10;
+	info->cpu = smp_processor_id();
+	info->old_snap_state = msm_hsl_port->old_snap_state;
+	info->count = count;
+
+	if (dir == DIR_RX) {
+		info->rx_misr = misr;
+	}
+
+	sec_debug_hsl_report_stat(port, dir, misr, count);
+	memcpy(&info->icount, &port->icount, sizeof(info->icount));
+
+	return;
+}
+
+static void sec_debug_hsl_insert_data(struct uart_port *port, int dir, char *in, size_t size)
+{
+	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+	debug_info_t *info = &msm_hsl_port->debug_hsl.info[dir];
+	buf_t *buf = &info->buf;
+	int space = 0;
+	int remain = size;
+	char *src = in;
+
+	if (!buf->data)
+		return;
+
+	while (remain > 0) {
+		space = CIRC_SPACE_TO_END(buf->head, buf->tail, buf->size);
+
+		space = min(space, remain);
+		if (space <= 0) {
+			pr_debug("no space in %s buf. H(%u), T(%u), Buf Size(%u), Remain#(%u)\n",
+				(dir == DIR_RX) ? "Rx" : "Tx", buf->head, buf->tail, buf->size,
+				remain);
+			buf->skip += remain;
+			return;
+		}
+
+		memcpy(&buf->data[buf->head], src, space);
+
+		buf->head = (buf->head + space) & (buf->size - 1);
+		remain -= space;
+		src += space;
+	}
+}
+
+static unsigned int sec_debug_hsl_adjust_size(const unsigned int in)
+{
+	unsigned int bit = find_last_bit((void *)&in, 32);
+	unsigned int adj;
+
+	adj = 1 << bit;
+	if (adj >= in)
+		return adj;
+
+	return (adj << 1);
+}
+
+static void sec_debug_hsl_init(struct uart_port *port)
+{
+	unsigned int rx_size, tx_size;
+	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+
+	if (!serial_hsl_log.enabled) {
+		pr_err("%s : serial_hsl_log is not enabled.\n", __func__);
+		goto log_disabled;
+	}
+
+	INIT_WORK(&msm_hsl_port->work, sec_debug_hsl_print_work);
+
+	rx_size = sec_debug_hsl_adjust_size(serial_hsl_log.rx_buf_size);
+	tx_size = sec_debug_hsl_adjust_size(serial_hsl_log.tx_buf_size);
+
+	msm_hsl_port->debug_hsl.info[DIR_RX].buf.data = kmalloc(rx_size, GFP_KERNEL);
+	if (unlikely(!msm_hsl_port->debug_hsl.info[DIR_RX].buf.data)) {
+		pr_err("%s : fail to alloc for Rx\n", __func__);
+		goto fail_rx_data;
+	} else {
+		msm_hsl_port->debug_hsl.info[DIR_RX].buf.size = rx_size;
+		pr_info("%s : alloc %d bytes for Rx dbg buf\n", __func__, rx_size);
+	}
+
+	msm_hsl_port->debug_hsl.info[DIR_TX].buf.data = kmalloc(tx_size, GFP_KERNEL);
+	if (unlikely(!msm_hsl_port->debug_hsl.info[DIR_TX].buf.data)) {
+		pr_err("%s : fail to alloc for Tx\n", __func__);
+		goto fail_tx_data;
+	} else {
+		msm_hsl_port->debug_hsl.info[DIR_TX].buf.size = tx_size;
+		pr_info("%s : alloc %d bytes for Tx dbg buf\n", __func__, tx_size);
+	}
+
+	if (serial_hsl_log.log_mask & IPCLOG_MASK) {
+		msm_hsl_port->debug_hsl.ipc_log
+			= ipc_log_context_create(SERIAL_HSL_LOG_PAGES, "uart_log", 0);
+	}
+
+	return;
+
+fail_tx_data:
+	kfree(msm_hsl_port->debug_hsl.info[DIR_RX].buf.data);
+fail_rx_data:
+	serial_hsl_log.enabled = 0;
+log_disabled:
+	return;
+}
+#endif
+
 static void handle_rx(struct uart_port *port, unsigned int misr)
 {
 	struct tty_struct *tty = port->state->port.tty;
@@ -555,6 +1131,10 @@ static void handle_rx(struct uart_port *port, unsigned int misr)
 	unsigned int sr;
 	int count = 0;
 	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+#ifdef CONFIG_SEC_BSP
+	int debug_count = 0;
+	ktime_t calltime = sec_debug_hsl_start(msm_hsl_port, DIR_RX);
+#endif
 
 	vid = msm_hsl_port->ver_id;
 	/*
@@ -579,6 +1159,10 @@ static void handle_rx(struct uart_port *port, unsigned int misr)
 		msm_hsl_port->old_snap_state += count;
 	}
 
+#ifdef CONFIG_SEC_BSP
+	debug_count = count;
+#endif
+
 	/* and now the main RX loop */
 	while (count > 0) {
 		unsigned int c;
@@ -587,6 +1171,9 @@ static void handle_rx(struct uart_port *port, unsigned int misr)
 		sr = msm_hsl_read(port, regmap[vid][UARTDM_SR]);
 		if ((sr & UARTDM_SR_RXRDY_BMSK) == 0) {
 			msm_hsl_port->old_snap_state -= count;
+#ifdef CONFIG_SEC_BSP
+			debug_count -= count;
+#endif
 			break;
 		}
 		c = msm_hsl_read(port, regmap[vid][UARTDM_RF]);
@@ -611,10 +1198,20 @@ static void handle_rx(struct uart_port *port, unsigned int misr)
 		/* if (!uart_handle_sysrq_char(port, c)) */
 		tty_insert_flip_string(tty->port, (char *) &c,
 				       (count > 4) ? 4 : count);
+
+#ifdef CONFIG_SEC_BSP
+		sec_debug_hsl_insert_data(port, DIR_RX, (char *)&c, (count > 4) ? 4 : count);
+#endif
+
 		count -= 4;
 	}
 
 	tty_flip_buffer_push(tty->port);
+
+#ifdef CONFIG_SEC_BSP
+	sec_debug_hsl_report(port, DIR_RX, calltime, misr, debug_count);
+	sec_debug_hsl_print_data(&msm_hsl_port->work);
+#endif
 }
 
 static void handle_tx(struct uart_port *port)
@@ -625,6 +1222,10 @@ static void handle_tx(struct uart_port *port)
 	int x;
 	unsigned int tf_pointer = 0;
 	unsigned int vid;
+#ifdef CONFIG_SEC_BSP
+	int debug_count = 0;
+	ktime_t calltime = sec_debug_hsl_start(UART_TO_MSM(port), DIR_TX);
+#endif
 
 	vid = UART_TO_MSM(port)->ver_id;
 	tx_count = uart_circ_chars_pending(xmit);
@@ -651,6 +1252,10 @@ static void handle_tx(struct uart_port *port)
 		msm_hsl_stop_tx(port);
 		return;
 	}
+
+#ifdef CONFIG_SEC_BSP
+	debug_count = tx_count - tf_pointer;
+#endif
 
 	while (tf_pointer < tx_count)  {
 		if (unlikely(!(msm_hsl_read(port, regmap[vid][UARTDM_SR]) &
@@ -681,6 +1286,10 @@ static void handle_tx(struct uart_port *port)
 			break;
 		}
 		}
+#ifdef CONFIG_SEC_BSP
+		sec_debug_hsl_insert_data(port, DIR_TX, (char *)&x,
+				(tx_count - tf_pointer) < 4 ? (tx_count - tf_pointer) : 4);
+#endif
 		msm_hsl_write(port, x, regmap[vid][UARTDM_TF]);
 		xmit->tail = ((tx_count - tf_pointer < 4) ?
 			      (tx_count - tf_pointer + xmit->tail) :
@@ -695,6 +1304,10 @@ static void handle_tx(struct uart_port *port)
 	if (uart_circ_chars_pending(xmit) < WAKEUP_CHARS)
 		uart_write_wakeup(port);
 
+#ifdef CONFIG_SEC_BSP
+	sec_debug_hsl_report(port, DIR_TX, calltime, 0, debug_count);
+	sec_debug_hsl_print_data(&UART_TO_MSM(port)->work);
+#endif
 }
 
 static void handle_delta_cts(struct uart_port *port)
@@ -900,6 +1513,9 @@ static void msm_hsl_set_baud_rate(struct uart_port *port,
 		break;
 	}
 
+#ifdef CONFIG_SEC_BSP
+	msm_hsl_port->debug_hsl.baud_rate = baud;
+#endif
 	vid = msm_hsl_port->ver_id;
 	msm_hsl_write(port, baud_code, regmap[vid][UARTDM_CSR]);
 
@@ -940,7 +1556,13 @@ static void msm_hsl_set_baud_rate(struct uart_port *port,
 	 * whereas it is consider to be in Bytes for UART Core.
 	 * Hence configuring Rx Watermark as 48 Words.
 	 */
+#ifdef CONFIG_SEC_FACTORY
+	watermark = port->fifosize / 2;
+#else
 	watermark = (port->fifosize * 3) / 4;
+#endif
+	pr_warn("RX FIFO watermark is set to %d(fifo size: %d)\n",
+				watermark, port->fifosize);
 	msm_hsl_write(port, watermark, regmap[vid][UARTDM_RFWR]);
 
 	/* set TX watermark */
@@ -1841,6 +2463,9 @@ static int msm_serial_hsl_probe(struct platform_device *pdev)
 	if (msm_hsl_port->pclk)
 		clk_disable_unprepare(msm_hsl_port->pclk);
 
+#ifdef CONFIG_SEC_BSP
+	sec_debug_hsl_init(port);
+#endif
 err:
 	return ret;
 }
@@ -1889,6 +2514,8 @@ static int msm_serial_hsl_suspend(struct device *dev)
 		uart_suspend_port(&msm_hsl_uart_driver, port);
 		if (device_may_wakeup(dev))
 			enable_irq_wake(port->irq);
+
+		pinctrl_pm_select_sleep_state(dev);
 	}
 
 	return 0;
@@ -1901,6 +2528,7 @@ static int msm_serial_hsl_resume(struct device *dev)
 	port = get_port_from_line(get_line(pdev));
 
 	if (port) {
+		pinctrl_pm_select_default_state(dev);
 
 		uart_resume_port(&msm_hsl_uart_driver, port);
 		if (device_may_wakeup(dev))

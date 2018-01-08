@@ -139,6 +139,10 @@ struct qusb_phy {
 	int			vdd_levels[3]; /* none, low, high */
 	int			init_seq_len;
 	int			*qusb_phy_init_seq;
+#ifdef CONFIG_USB_HOST_NOTIFY
+	int			init_seq_len_host;
+	int			*qusb_phy_init_seq_host;
+#endif
 
 	u32			tune2_val;
 	int			tune2_efuse_bit_pos;
@@ -768,9 +772,20 @@ static int qusb_phy_init(struct usb_phy *phy)
 	/* save reset value to override based on clk scheme */
 	reset_val = readl_relaxed(qphy->base + QUSB2PHY_PLL_TEST);
 
-	if (qphy->qusb_phy_init_seq)
-		qusb_phy_write_seq(qphy->base, qphy->qusb_phy_init_seq,
-				qphy->init_seq_len, 0);
+#ifdef CONFIG_USB_HOST_NOTIFY
+	if(qphy->phy.otg_mode == OTG_MODE_HOST) {
+		if (qphy->qusb_phy_init_seq_host)
+			qusb_phy_write_seq(qphy->base, qphy->qusb_phy_init_seq_host,
+					qphy->init_seq_len_host, 0);
+	} else {
+#endif
+		if (qphy->qusb_phy_init_seq)
+			qusb_phy_write_seq(qphy->base, qphy->qusb_phy_init_seq,
+					qphy->init_seq_len, 0);
+#ifdef CONFIG_USB_HOST_NOTIFY
+	}
+#endif
+
 
 	/*
 	 * Check for EFUSE value only if tune2_efuse_reg is available
@@ -1071,6 +1086,19 @@ static int qusb_phy_notify_connect(struct usb_phy *phy,
 	return 0;
 }
 
+#ifdef CONFIG_USB_HOST_NOTIFY
+static int qusb_phy_set_mode(struct usb_phy *phy,
+					enum usb_otg_mode mode)
+{
+	struct qusb_phy *qphy = container_of(phy, struct qusb_phy, phy);
+
+	dev_info(phy->dev, "qusb_phy_set_mode, usb_otg_mode=%d\n", mode);
+
+	qphy->phy.otg_mode = mode;
+	return 0;
+}
+#endif
+
 static int qusb_phy_notify_disconnect(struct usb_phy *phy,
 					enum usb_device_speed speed)
 {
@@ -1312,7 +1340,28 @@ static int qusb_phy_probe(struct platform_device *pdev)
 			dev_err(dev, "error allocating memory for phy_init_seq\n");
 		}
 	}
+#ifdef CONFIG_USB_HOST_NOTIFY
+	of_get_property(dev->of_node, "qcom,qusb-phy-init-seq-host", &size);
+	if (size) {
+		qphy->qusb_phy_init_seq_host = devm_kzalloc(dev,
+						size, GFP_KERNEL);
+		if (qphy->qusb_phy_init_seq_host) {
+			qphy->init_seq_len_host =
+				(size / sizeof(*qphy->qusb_phy_init_seq_host));
+			if (qphy->init_seq_len_host % 2) {
+				dev_err(dev, "invalid init_seq_len\n");
+				return -EINVAL;
+			}
 
+			of_property_read_u32_array(dev->of_node,
+				"qcom,qusb-phy-init-seq-host",
+				qphy->qusb_phy_init_seq_host,
+				qphy->init_seq_len_host);
+		} else {
+			dev_err(dev, "error allocating memory for phy_init_seq\n");
+		}
+	}
+#endif
 	qphy->ulpi_mode = false;
 	ret = of_property_read_string(dev->of_node, "phy_type", &phy_type);
 
@@ -1365,6 +1414,10 @@ static int qusb_phy_probe(struct platform_device *pdev)
 		qphy->phy.notify_connect        = qusb_phy_notify_connect;
 		qphy->phy.notify_disconnect     = qusb_phy_notify_disconnect;
 	}
+
+#ifdef CONFIG_USB_HOST_NOTIFY
+	qphy->phy.set_mode		= qusb_phy_set_mode;
+#endif
 
 	/*
 	 * On some platforms multiple QUSB PHYs are available. If QUSB PHY is

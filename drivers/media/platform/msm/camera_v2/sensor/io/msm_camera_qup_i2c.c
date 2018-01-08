@@ -74,13 +74,11 @@ int32_t msm_camera_qup_i2c_read(struct msm_camera_i2c_client *client,
 {
 	int32_t rc = -EFAULT;
 	unsigned char *buf = NULL;
-
 	if ((client->addr_type != MSM_CAMERA_I2C_BYTE_ADDR
 		&& client->addr_type != MSM_CAMERA_I2C_WORD_ADDR)
 		|| (data_type != MSM_CAMERA_I2C_BYTE_DATA
 		&& data_type != MSM_CAMERA_I2C_WORD_DATA))
 		return rc;
-
 	if (client->addr_type > UINT_MAX - data_type) {
 			pr_err("%s: integer overflow prevented\n", __func__);
 			return rc;
@@ -91,7 +89,6 @@ int32_t msm_camera_qup_i2c_read(struct msm_camera_i2c_client *client,
 			pr_err("%s:%d no memory\n", __func__, __LINE__);
 			return -ENOMEM;
 	}
-
 	if (client->addr_type == MSM_CAMERA_I2C_BYTE_ADDR) {
 		buf[0] = addr;
 	} else if (client->addr_type == MSM_CAMERA_I2C_WORD_ADDR) {
@@ -128,7 +125,6 @@ int32_t msm_camera_qup_i2c_read_seq(struct msm_camera_i2c_client *client,
 		&& client->addr_type != MSM_CAMERA_I2C_WORD_ADDR)
 		|| num_byte == 0)
 		return rc;
-
 	if (num_byte > I2C_REG_DATA_MAX) {
 			pr_err("%s: Error num_byte:0x%x exceeds 8K max supported:0x%x\n",
 					__func__, num_byte, I2C_REG_DATA_MAX);
@@ -144,7 +140,6 @@ int32_t msm_camera_qup_i2c_read_seq(struct msm_camera_i2c_client *client,
 			pr_err("%s:%d no memory\n", __func__, __LINE__);
 			return -ENOMEM;
 	}
-
 	if (client->addr_type == MSM_CAMERA_I2C_BYTE_ADDR) {
 		buf[0] = addr;
 	} else if (client->addr_type == MSM_CAMERA_I2C_WORD_ADDR) {
@@ -439,7 +434,7 @@ int32_t msm_camera_qup_i2c_poll(struct msm_camera_i2c_client *client,
 	uint32_t addr, uint16_t data,
 	enum msm_camera_i2c_data_type data_type, uint32_t delay_ms)
 {
-	int32_t rc = 0;
+	int32_t rc;
 	int i;
 	S_I2C_DBG("%s: addr: 0x%x data: 0x%x dt: %d\n",
 		__func__, addr, data, data_type);

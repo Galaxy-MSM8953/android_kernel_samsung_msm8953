@@ -2810,6 +2810,10 @@ __acquires(udc->lock)
 		case USB_REQ_SET_CONFIGURATION:
 			if (type == (USB_DIR_OUT|USB_TYPE_STANDARD))
 				udc->configured = !!req.wValue;
+#ifdef CONFIG_USB_CHARGING_EVENT
+			udc->vbus_current = USB_CURRENT_HIGH_SPEED;
+			schedule_work(&udc->set_vbus_current_work);
+#endif
 			goto delegate;
 		case USB_REQ_SET_FEATURE:
 			if (type == (USB_DIR_OUT|USB_RECIP_ENDPOINT) &&

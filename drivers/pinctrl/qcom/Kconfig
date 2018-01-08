@@ -135,3 +135,13 @@ config PINCTRL_MSM8909
 	  This is the pinctrl, pinmux, pinconf and gpiolib driver for the
 	  QTI TLMM block found in the QTI MSM8909 platform.
 endif
+
+config SENSORS_FP_SPI_GPIO_START
+	depends on SENSORS_FINGERPRINT
+	int "Fingerprint spi gpio number start"
+	default -1
+
+config SENSORS_FP_SPI_GPIO_END
+	depends on SENSORS_FINGERPRINT
+	int "Fingerprint spi gpio number end"
+	default -1

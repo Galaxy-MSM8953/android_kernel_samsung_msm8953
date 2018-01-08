@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -235,7 +235,7 @@ static int ipa_generate_flt_hw_rule(enum ipa_ip_type ip,
  * @ip: the ip address family type
  * @hdr_sz: header size
  *
- * Returns:	0 on success, negative on failure
+ * Returns:	size on success, negative on failure
  *
  * caller needs to hold any needed locks to ensure integrity
  *
@@ -373,7 +373,12 @@ static int ipa_generate_flt_hw_tbl_common(enum ipa_ip_type ip, u8 *base,
 					((long)body &
 					IPA_FLT_ENTRY_MEMORY_ALLIGNMENT));
 		} else {
-			WARN_ON(tbl->sz == 0);
+			if (tbl->sz == 0) {
+				IPAERR("tbl size is 0\n");
+				WARN_ON(1);
+				goto proc_err;
+			}
+
 			/* allocate memory for the flt tbl */
 			flt_tbl_mem.size = tbl->sz;
 			flt_tbl_mem.base =
@@ -460,7 +465,12 @@ static int ipa_generate_flt_hw_tbl_common(enum ipa_ip_type ip, u8 *base,
 						((long)body &
 					IPA_FLT_ENTRY_MEMORY_ALLIGNMENT));
 			} else {
-				WARN_ON(tbl->sz == 0);
+				if (tbl->sz == 0) {
+					IPAERR("tbl size is 0\n");
+					WARN_ON(1);
+					goto proc_err;
+				}
+
 				/* allocate memory for the flt tbl */
 				flt_tbl_mem.size = tbl->sz;
 				flt_tbl_mem.base =
@@ -534,8 +544,15 @@ static int ipa_generate_flt_hw_tbl_v1_1(enum ipa_ip_type ip,
 	u8 *hdr;
 	u8 *body;
 	u8 *base;
+	int res;
 
-	mem->size = ipa_get_flt_hw_tbl_size(ip, &hdr_sz);
+	res = ipa_get_flt_hw_tbl_size(ip, &hdr_sz);
+	if (res < 0) {
+		IPAERR("ipa_get_flt_hw_tbl_size failed %d\n", res);
+		return res;
+	}
+
+	mem->size = res;
 	mem->size = IPA_HW_TABLE_ALIGNMENT(mem->size);
 
 	if (mem->size == 0) {
@@ -720,6 +737,7 @@ static int ipa_generate_flt_hw_tbl_v2(enum ipa_ip_type ip,
 	u32 *entr;
 	u32 body_start_offset;
 	u32 hdr_top;
+	int res;
 
 	if (ip == IPA_IP_v4)
 		body_start_offset = IPA_MEM_PART(apps_v4_flt_ofst) -
@@ -756,7 +774,13 @@ static int ipa_generate_flt_hw_tbl_v2(enum ipa_ip_type ip,
 		entr++;
 	}
 
-	mem->size = ipa_get_flt_hw_tbl_size(ip, &hdr_sz);
+	res = ipa_get_flt_hw_tbl_size(ip, &hdr_sz);
+	if (res < 0) {
+		IPAERR("ipa_get_flt_hw_tbl_size failed %d\n", res);
+		goto body_err;
+	}
+
+	mem->size = res;
 	mem->size -= hdr_sz;
 	mem->size = IPA_HW_TABLE_ALIGNMENT(mem->size);
 
@@ -999,7 +1023,7 @@ static int __ipa_add_flt_rule(struct ipa_flt_tbl *tbl, enum ipa_ip_type ip,
 				goto error;
 			}
 
-			if (rt_tbl->cookie != IPA_COOKIE) {
+			if (rt_tbl->cookie != IPA_RT_TBL_COOKIE) {
 				IPAERR("RT table cookie is invalid\n");
 				goto error;
 			}
@@ -1020,7 +1044,7 @@ static int __ipa_add_flt_rule(struct ipa_flt_tbl *tbl, enum ipa_ip_type ip,
 	}
 	INIT_LIST_HEAD(&entry->link);
 	entry->rule = *rule;
-	entry->cookie = IPA_COOKIE;
+	entry->cookie = IPA_FLT_COOKIE;
 	entry->rt_tbl = rt_tbl;
 	entry->tbl = tbl;
 	if (add_rear) {
@@ -1039,6 +1063,7 @@ static int __ipa_add_flt_rule(struct ipa_flt_tbl *tbl, enum ipa_ip_type ip,
 	if (id < 0) {
 		IPAERR("failed to add to tree\n");
 		WARN_ON(1);
+		goto ipa_insert_failed;
 	}
 	*rule_hdl = id;
 	entry->id = id;
@@ -1046,6 +1071,12 @@ static int __ipa_add_flt_rule(struct ipa_flt_tbl *tbl, enum ipa_ip_type ip,
 
 	return 0;
 
+ipa_insert_failed:
+	tbl->rule_cnt--;
+	if (entry->rt_tbl)
+		entry->rt_tbl->ref_cnt--;
+	list_del(&entry->link);
+	kmem_cache_free(ipa_ctx->flt_rule_cache, entry);
 error:
 	return -EPERM;
 }
@@ -1061,7 +1092,7 @@ static int __ipa_del_flt_rule(u32 rule_hdl)
 		return -EINVAL;
 	}
 
-	if (entry->cookie != IPA_COOKIE) {
+	if (entry->cookie != IPA_FLT_COOKIE) {
 		IPAERR("bad params\n");
 		return -EINVAL;
 	}
@@ -1093,7 +1124,7 @@ static int __ipa_mdfy_flt_rule(struct ipa_flt_rule_mdfy *frule,
 		goto error;
 	}
 
-	if (entry->cookie != IPA_COOKIE) {
+	if (entry->cookie != IPA_FLT_COOKIE) {
 		IPAERR("bad params\n");
 		goto error;
 	}
@@ -1114,7 +1145,7 @@ static int __ipa_mdfy_flt_rule(struct ipa_flt_rule_mdfy *frule,
 				goto error;
 			}
 
-			if (rt_tbl->cookie != IPA_COOKIE) {
+			if (rt_tbl->cookie != IPA_RT_TBL_COOKIE) {
 				IPAERR("RT table cookie is invalid\n");
 				goto error;
 			}

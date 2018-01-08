@@ -583,7 +583,7 @@
 				config {
 					pins = "gpio67";
 					drive-strength = <2>;
-					bias-pull-up;
+					bias-disable;
 				};
 			};
 
@@ -871,24 +871,24 @@
 		pri-tlmm-lines {
 			pri_tlmm_lines_act: pri_tlmm_lines_act {
 				mux {
-					pins = "gpio85", "gpio88";
+                    pins = "gpio85", "gpio88", "gpio86";
 					function = "pri_mi2s";
 				};
 
 				config {
-					pins = "gpio85", "gpio88";
+                    pins = "gpio85", "gpio88", "gpio86";
 					drive-strength = <8>;
 				};
 			};
 
 			pri_tlmm_lines_sus: pri_tlmm_lines_sus {
 				mux {
-					pins = "gpio85", "gpio88";
+                    pins = "gpio85", "gpio88", "gpio86";
 					function = "pri_mi2s";
 				};
 
 				config {
-					pins = "gpio85", "gpio88";
+                    pins = "gpio85", "gpio88", "gpio86";
 					drive-strength = <2>;
 					bias-pull-down;
 				};

@@ -28,6 +28,7 @@
 #include <linux/clk/msm-clk-provider.h>
 #include <linux/of_platform.h>
 #include <linux/pm_opp.h>
+#include <linux/sec_debug.h>
 
 #include <trace/events/power.h>
 #include "clock.h"
@@ -672,6 +673,7 @@ int clk_set_rate(struct clk *clk, unsigned long rate)
 	}
 
 	trace_clock_set_rate(name, rate, raw_smp_processor_id());
+	sec_debug_clock_rate_log(name, rate, raw_smp_processor_id());
 
 	start_rate = clk->rate;
 
@@ -707,6 +709,7 @@ int clk_set_rate(struct clk *clk, unsigned long rate)
 		__clk_notify(clk, POST_RATE_CHANGE, start_rate, clk->rate);
 
 	trace_clock_set_rate_complete(name, clk->rate, raw_smp_processor_id());
+	sec_debug_clock_rate_complete_log(name, clk->rate, raw_smp_processor_id());
 out:
 	mutex_unlock(&clk->prepare_lock);
 	return rc;
