@@ -3327,6 +3327,7 @@ static void tcp_send_challenge_ack(struct sock *sk)
 	static unsigned int challenge_count;
 	u32 count, now = jiffies / HZ;
 
+	/* Check host-wide RFC 5961 rate limit. */
 	if (now != challenge_timestamp) {
 		u32 half = (sysctl_tcp_challenge_ack_limit + 1) >> 1;
 

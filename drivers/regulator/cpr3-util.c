@@ -1093,7 +1093,6 @@ static int cpr3_panic_notifier_init(struct cpr3_controller *ctrl)
 				regs[i].addr);
 			return -EINVAL;
 		}
-
 		regs[i].value = 0xFFFFFFFF;
 	}
 
