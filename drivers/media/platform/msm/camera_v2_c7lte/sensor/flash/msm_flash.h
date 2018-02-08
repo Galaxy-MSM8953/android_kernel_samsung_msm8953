@@ -18,7 +18,7 @@
 #include <media/v4l2-subdev.h>
 #include <media/v4l2-ioctl.h>
 #include "../../include/media/msm_cam_sensor.h"
-#include <soc/qcom/camera2.h>
+#include "../../include/soc/qcom/camera2.h"
 #include "msm_camera_i2c.h"
 #include "msm_sd.h"
 #include <linux/leds/msm_ext_pmic_flash.h>
