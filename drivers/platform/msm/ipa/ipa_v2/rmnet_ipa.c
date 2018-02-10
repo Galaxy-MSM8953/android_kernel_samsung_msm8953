@@ -2515,17 +2515,16 @@ int rmnet_ipa_set_tether_client_pipe(
 	if (data->ul_src_pipe_len > QMI_IPA_MAX_PIPES_V01 ||
 		data->ul_src_pipe_len < 0) {
 		IPAWANERR("UL src pipes %d exceeding max %d\n",
-				data->ul_src_pipe_len,
-				QMI_IPA_MAX_PIPES_V01);
+			data->ul_src_pipe_len,
+			QMI_IPA_MAX_PIPES_V01);
 		return -EFAULT;
 	}
-
 	/* error checking if dl_dst_pipe_len valid or not*/
 	if (data->dl_dst_pipe_len > QMI_IPA_MAX_PIPES_V01 ||
 		data->dl_dst_pipe_len < 0) {
 		IPAWANERR("DL dst pipes %d exceeding max %d\n",
-				data->dl_dst_pipe_len,
-				QMI_IPA_MAX_PIPES_V01);
+			data->dl_dst_pipe_len,
+			QMI_IPA_MAX_PIPES_V01);
 		return -EFAULT;
 	}
 
