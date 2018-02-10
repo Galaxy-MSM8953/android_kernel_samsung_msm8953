@@ -272,8 +272,7 @@ static inline int kgsl_allocate_global(struct kgsl_device *device,
 		ret = kgsl_sharedmem_alloc_contig(device, memdesc,
 						(size_t) size);
 	else {
-		ret = kgsl_sharedmem_page_alloc_user(memdesc,
-						(size_t) size);
+		ret = kgsl_sharedmem_page_alloc_user(memdesc, (size_t) size);
 		if (ret == 0)
 			kgsl_memdesc_map(memdesc);
 	}

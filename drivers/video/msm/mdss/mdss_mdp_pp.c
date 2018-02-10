@@ -6840,19 +6840,19 @@ static int is_valid_calib_addr(void *addr, u32 operation)
 				goto valid_addr;
 		}
 		if (mdss_res->vig_pipes &&
-				ptr >= mdss_res->vig_pipes->base) {
+		  ptr >= mdss_res->vig_pipes->base) {
 			ret = is_valid_calib_vig_addr(ptr);
 			if (ret)
 				goto valid_addr;
 		}
 		if (mdss_res->rgb_pipes &&
-				ptr >= mdss_res->rgb_pipes->base) {
+		  ptr >= mdss_res->rgb_pipes->base) {
 			ret = is_valid_calib_rgb_addr(ptr);
 			if (ret)
 				goto valid_addr;
 		}
 		if (mdss_res->dma_pipes &&
-				ptr >= mdss_res->dma_pipes->base) {
+		  ptr >= mdss_res->dma_pipes->base) {
 			ret = is_valid_calib_dma_addr(ptr);
 			if (ret)
 				goto valid_addr;
