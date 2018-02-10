@@ -1318,7 +1318,7 @@ static int spcom_handle_send_command(struct spcom_channel *ch,
 	 */
 	if (size < sizeof(*cmd)) {
 		pr_err("ch [%s] invalid cmd buf.\n",
-				ch->name);
+			ch->name);
 		return -EINVAL;
 	}
 
@@ -1336,12 +1336,12 @@ static int spcom_handle_send_command(struct spcom_channel *ch,
 	/* Check param validity */
 	if (buf_size > SPCOM_MAX_RESPONSE_SIZE) {
 		pr_err("ch [%s] invalid buf size [%d].\n",
-				ch->name, buf_size);
+			ch->name, buf_size);
 		return -EINVAL;
 	}
 	if (size != sizeof(*cmd) + buf_size) {
 		pr_err("ch [%s] invalid cmd size [%d].\n",
-				ch->name, size);
+			ch->name, size);
 		return -EINVAL;
 	}
 
@@ -1567,7 +1567,7 @@ static int spcom_handle_lock_ion_buf_command(struct spcom_channel *ch,
 
 	if (size != sizeof(*cmd)) {
 		pr_err("cmd size [%d] , expected [%d].\n",
-					(int)size, (int) sizeof(*cmd));
+		       (int) size,  (int) sizeof(*cmd));
 		return -EINVAL;
 	}
 
@@ -1620,7 +1620,7 @@ static int spcom_handle_unlock_ion_buf_command(struct spcom_channel *ch,
 
 	if (size != sizeof(*cmd)) {
 		pr_err("cmd size [%d] , expected [%d].\n",
-					(int)size, (int) sizeof(*cmd));
+		       (int) size,  (int) sizeof(*cmd));
 		return -EINVAL;
 	}
 
