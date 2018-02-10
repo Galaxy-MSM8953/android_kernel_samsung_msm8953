@@ -766,7 +766,6 @@ static int audio_effects_release(struct inode *inode, struct file *file)
 	q6asm_audio_client_free(effects->ac);
 
 	mutex_destroy(&effects->lock);
-
 	kfree(effects);
 
 	pr_debug("%s: close session success\n", __func__);
