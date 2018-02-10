@@ -9,7 +9,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
 #include <linux/debugfs.h>
 #include <linux/errno.h>
 #include <linux/etherdevice.h>
@@ -190,7 +189,6 @@ const struct file_operations ecm_ipa_debugfs_atomic_ops = {
 	.open = ecm_ipa_debugfs_atomic_open,
 	.read = ecm_ipa_debugfs_atomic_read,
 };
-
 
 static void ecm_ipa_msg_free_cb(void *buff, u32 len, u32 type)
 {
@@ -1098,12 +1096,10 @@ static void ecm_ipa_destory_rm_resource(struct ecm_ipa_dev *ecm_ipa_ctx)
 	ECM_IPA_LOG_EXIT();
 }
 
-
 static int resource_request(struct ecm_ipa_dev *ecm_ipa_ctx)
 {
-	
 	return ipa_rm_inactivity_timer_request_resource(
-			IPA_RM_RESOURCE_STD_ECM_PROD);
+		IPA_RM_RESOURCE_STD_ECM_PROD);
 }
 
 static void resource_release(struct ecm_ipa_dev *ecm_ipa_ctx)
@@ -1181,7 +1177,6 @@ static void ecm_ipa_tx_timeout(struct net_device *net)
 	net->stats.tx_errors++;
 }
 
-
 static int ecm_ipa_debugfs_atomic_open(struct inode *inode, struct file *file)
 {
 	struct ecm_ipa_dev *ecm_ipa_ctx = inode->i_private;
@@ -1190,7 +1185,6 @@ static int ecm_ipa_debugfs_atomic_open(struct inode *inode, struct file *file)
 	ECM_IPA_LOG_EXIT();
 	return 0;
 }
-
 
 static ssize_t ecm_ipa_debugfs_atomic_read(struct file *file,
 		char __user *ubuf, size_t count, loff_t *ppos)
@@ -1209,7 +1203,6 @@ static void ecm_ipa_debugfs_init(struct ecm_ipa_dev *ecm_ipa_ctx)
 {
 	const mode_t flags_read_write = S_IRUGO | S_IWUGO;
 	const mode_t flags_read_only = S_IRUGO;
-	const mode_t flags_write_only = S_IWUGO;
 	struct dentry *file;
 
 	ECM_IPA_LOG_ENTRY();
@@ -1241,7 +1234,6 @@ static void ecm_ipa_debugfs_init(struct ecm_ipa_dev *ecm_ipa_ctx)
 		ECM_IPA_ERROR("could not create outstanding file\n");
 		goto fail_file;
 	}
-
 
 	ECM_IPA_DEBUG("debugfs entries were created\n");
 	ECM_IPA_LOG_EXIT();
@@ -1312,7 +1304,6 @@ out:
 	ECM_IPA_LOG_EXIT();
 	return result;
 }
-
 
 /**
  * ecm_ipa_set_device_ethernet_addr() - set device etherenet address

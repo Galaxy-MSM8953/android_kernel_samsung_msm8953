@@ -600,12 +600,12 @@ static int __ipa3_del_hdr_proc_ctx(u32 proc_ctx_hdl,
 		htbl->proc_ctx_cnt, entry->offset_entry->offset);
 
 	if (by_user && entry->user_deleted) {
-		IPAERR("proc_ctx already deleted by user\n");	
-		return -EINVAL;	
-	}	
+		IPAERR("proc_ctx already deleted by user\n");
+		return -EINVAL;
+	}
 
-	if (by_user)	
-		entry->user_deleted = true;	
+	if (by_user)
+		entry->user_deleted = true;
 
 	if (--entry->ref_cnt) {
 		IPADBG("proc_ctx_hdl %x ref_cnt %d\n",
@@ -655,12 +655,12 @@ int __ipa3_del_hdr(u32 hdr_hdl, bool by_user)
 			htbl->hdr_cnt, entry->offset_entry->offset);
 
 	if (by_user && entry->user_deleted) {
-		IPAERR("proc_ctx already deleted by user\n");		
-		return -EINVAL;		
-	}		
+		IPAERR("proc_ctx already deleted by user\n");
+		return -EINVAL;
+	}
 
-	if (by_user)		
-		entry->user_deleted = true;		
+	if (by_user)
+		entry->user_deleted = true;
 
 	if (--entry->ref_cnt) {
 		IPADBG("hdr_hdl %x ref_cnt %d\n", hdr_hdl, entry->ref_cnt);

@@ -5315,11 +5315,11 @@ static int ipa3_load_single_fw(const struct firmware *firmware,
 	return 0;
 }
 
-
 /**
  * ipa3_load_fws() - Load the IPAv3 FWs into IPA&GSI SRAM.
  *
  * @firmware: Structure which contains the FW data from the user space.
+ * @gsi_mem_base: GSI base address
  *
  * Return value: 0 on success, negative otherwise
  *
@@ -5419,6 +5419,6 @@ int ipa3_load_fws(const struct firmware *firmware, phys_addr_t gsi_mem_base)
 	if (rc)
 		return rc;
 
-	IPADBG("IPA FWs (GSI FW, DPS and HPS) loaded successfully\n");	
+	IPADBG("IPA FWs (GSI FW, DPS and HPS) loaded successfully\n");
 	return 0;
 }

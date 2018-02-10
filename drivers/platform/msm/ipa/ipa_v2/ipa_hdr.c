@@ -892,13 +892,13 @@ int __ipa_del_hdr(u32 hdr_hdl, bool by_user)
 		IPADBG("del hdr of sz=%d hdr_cnt=%d ofst=%d\n", entry->hdr_len,
 			htbl->hdr_cnt, entry->offset_entry->offset);
 
-	if (by_user && entry->user_deleted) {	
-		IPAERR("hdr already deleted by user\n");		
-		return -EINVAL;		
-	}		
-		
-	if (by_user)		
-		entry->user_deleted = true;				
+	if (by_user && entry->user_deleted) {
+		IPAERR("hdr already deleted by user\n");
+		return -EINVAL;
+	}
+
+	if (by_user)
+		entry->user_deleted = true;
 
 	if (--entry->ref_cnt) {
 		IPADBG("hdr_hdl %x ref_cnt %d\n", hdr_hdl, entry->ref_cnt);

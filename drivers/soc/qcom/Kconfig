@@ -301,7 +301,7 @@ config MSM_L2_IA_DEBUG
          capability. It exposes L2 indirect access
          debugfs interface to get/set data, address,
          and target cpus.
-		 
+
 config MSM_RPM_SMD
 	bool "RPM driver using SMD protocol"
 	help

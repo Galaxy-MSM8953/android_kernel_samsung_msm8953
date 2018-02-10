@@ -549,7 +549,7 @@ static void android_work(struct work_struct *data)
 			last_uevent = next_state;
 		}
 	} else {
-		pr_info("%s: did not send uevent (%d %d %p)\n", __func__,
+		pr_info("%s: did not send uevent (%d %d %pK)\n", __func__,
 			 dev->connected, dev->sw_connected, cdev->config);
 	}
 }
@@ -2184,6 +2184,7 @@ static int serial_function_bind_config(struct android_usb_function *f,
 	err = gport_setup(c);
 	if (err) {
 		pr_err("serial: Cannot setup transports");
+		gserial_deinit_port();
 		goto out;
 	}
 
@@ -4508,7 +4509,7 @@ static int usb_diag_update_pid_and_serial_num(u32 pid, const char *snum)
 		return -ENODEV;
 	}
 
-	pr_debug("%s: dload:%p pid:%x serial_num:%s\n",
+	pr_debug("%s: dload:%pK pid:%x serial_num:%s\n",
 				__func__, diag_dload, pid, snum);
 
 	/* update pid */
