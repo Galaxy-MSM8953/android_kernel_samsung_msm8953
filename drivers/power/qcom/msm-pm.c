@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2016,2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -680,7 +680,7 @@ static ssize_t msm_pc_debug_counters_file_read(struct file *file,
 {
 	struct msm_pc_debug_counters_buffer *data;
 	ssize_t ret;
-	
+
 	mutex_lock(&msm_pc_debug_mutex);
 	data = file->private_data;
 
@@ -704,7 +704,6 @@ static ssize_t msm_pc_debug_counters_file_read(struct file *file,
 
 	ret = simple_read_from_buffer(bufu, count, ppos,
 			data->buf, data->len);
-			
 exit:
 	mutex_unlock(&msm_pc_debug_mutex);
 	return ret;
@@ -715,7 +714,7 @@ static int msm_pc_debug_counters_file_open(struct inode *inode,
 {
 	struct msm_pc_debug_counters_buffer *buf;
 	int ret = 0;
-	
+
 	mutex_lock(&msm_pc_debug_mutex);
 
 	if (!inode->i_private) {
