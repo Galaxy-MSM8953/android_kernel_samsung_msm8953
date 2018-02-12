@@ -370,7 +370,7 @@ static ssize_t voice_svc_write(struct file *file, const char __user *buf,
 	uint32_t cmd;
 	struct voice_svc_register *register_data = NULL;
 	struct voice_svc_cmd_request *request_data = NULL;
-	uint32_t request_payload_size;	
+	uint32_t request_payload_size;
 
 	pr_debug("%s\n", __func__);
 
@@ -426,8 +426,7 @@ static ssize_t voice_svc_write(struct file *file, const char __user *buf,
 				ret = -EINVAL;
 				goto done;
 			}
-			ret = process_reg_cmd(
-			(struct voice_svc_register *)data->payload, prtd);
+			ret = process_reg_cmd(register_data, prtd);
 			if (!ret)
 				ret = count;
 		} else {
@@ -460,8 +459,7 @@ static ssize_t voice_svc_write(struct file *file, const char __user *buf,
 			if (count >= (sizeof(struct voice_svc_write_msg) +
 				      sizeof(struct voice_svc_cmd_request) +
 				      request_payload_size)) {
-				ret = voice_svc_send_req(
-					(struct voice_svc_cmd_request *)data->payload, prtd);
+				ret = voice_svc_send_req(request_data, prtd);
 				if (!ret)
 					ret = count;
 			} else {
