@@ -94,6 +94,8 @@ struct f_midi {
 
 static struct f_midi *_midi;
 
+static struct f_midi *the_midi;
+
 static inline struct f_midi *func_to_midi(struct usb_function *f)
 {
 	return container_of(f, struct f_midi, func);
@@ -410,6 +412,7 @@ static void f_midi_unbind(struct usb_configuration *c, struct usb_function *f)
 		snd_card_free_when_closed(card);
 
 	usb_free_all_descriptors(f);
+	the_midi = NULL;
 }
 
 static int f_midi_snd_free(struct snd_device *device)
@@ -583,6 +586,10 @@ static int f_midi_in_open(struct snd_rawmidi_substream *substream)
 {
 	struct f_midi *midi = substream->rmidi->private_data;
 
+	/* check if midi got disabled or re-enabled quickly */
+	if (midi != the_midi)
+		return -ENODEV;
+
 	if (!midi->in_port[substream->number])
 		return -EINVAL;
 
@@ -604,6 +611,10 @@ static void f_midi_in_trigger(struct snd_rawmidi_substream *substream, int up)
 {
 	struct f_midi *midi = substream->rmidi->private_data;
 
+	/* check if midi got disabled or re-enabled quickly */
+	if (midi != the_midi)
+		return;
+
 	if (!midi->in_port[substream->number])
 		return;
 
@@ -616,6 +627,10 @@ static void f_midi_in_trigger(struct snd_rawmidi_substream *substream, int up)
 static int f_midi_out_open(struct snd_rawmidi_substream *substream)
 {
 	struct f_midi *midi = substream->rmidi->private_data;
+
+	/* check if midi got disabled or re-enabled quickly */
+	if (midi != the_midi)
+		return -ENODEV;
 
 	if (substream->number >= MAX_PORTS)
 		return -EINVAL;
@@ -636,6 +651,10 @@ static int f_midi_out_close(struct snd_rawmidi_substream *substream)
 static void f_midi_out_trigger(struct snd_rawmidi_substream *substream, int up)
 {
 	struct f_midi *midi = substream->rmidi->private_data;
+
+	/* check if midi got disabled or re-enabled quickly */
+	if (midi != the_midi)
+		return;
 
 	VDBG(midi, "%s()\n", __func__);
 
@@ -970,6 +989,7 @@ int /* __init */ f_midi_bind_config(struct usb_configuration *c,
 	if (status)
 		goto setup_fail;
 
+	the_midi = midi;
 
 	if (config) {
 		config->card = midi->rmidi->card->number;
