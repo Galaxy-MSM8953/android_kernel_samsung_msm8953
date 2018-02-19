@@ -25,7 +25,11 @@
 #if defined(CONFIG_MUIC_UNIVERSAL_SM5705_AFC)
 #define DISABLE_AFC
 #endif
+#if defined(CONFIG_SEC_C7LTE_CHN) || defined(CONFIG_SEC_ON7XLTE_CHN)
+#include "../media/platform/msm/camera_v2_c7lte/include/soc/qcom/camera2.h"
+#else
 #include <soc/qcom/camera2.h>
+#endif
 
 struct msm_pinctrl_info g_led_pinctrl_info;
 
