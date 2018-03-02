@@ -774,7 +774,6 @@ static int s2mm005_usbpd_probe(struct i2c_client *i2c,
 	usbpd_data->is_client = 0;
 	usbpd_data->manual_lpm_mode = 0;
 	usbpd_data->water_det = 0;
-	usbpd_data->booting_water_det = 0;
 #if defined(CONFIG_DUAL_ROLE_USB_INTF)
 	usbpd_data->try_state_change = 0;
 #endif

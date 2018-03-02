@@ -339,6 +339,12 @@ static ssize_t back_cal_data_check_show(struct device *dev,
 	return snprintf(buf, sizeof(cal_crc), "%s", cal_crc);
 }
 
+static ssize_t front_cal_data_check_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "NULL NULL NULL\n");
+}
+
 static ssize_t back_cal_data_check_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
@@ -700,6 +706,8 @@ static DEVICE_ATTR(rear_fwcheck, S_IRUGO|S_IWUSR|S_IWGRP,
     back_fw_crc_check_show, back_fw_crc_check_store);
 static DEVICE_ATTR(rear_afcal, S_IRUGO|S_IWUSR|S_IWGRP,
     back_cal_data_check_show, back_cal_data_check_store);
+static DEVICE_ATTR(front_afcal, S_IRUGO|S_IWUSR|S_IWGRP,
+    front_cal_data_check_show, NULL);
 static DEVICE_ATTR(isp_core, S_IRUGO|S_IWUSR|S_IWGRP,
     back_isp_core_check_show, back_isp_core_check_store);
 static DEVICE_ATTR(front_camtype, S_IRUGO, front_camera_type_show, NULL);
@@ -968,6 +976,13 @@ static int __init msm_sensor_init_module(void)
 	}
 #endif
 
+	if (device_create_file(cam_dev_front, &dev_attr_front_afcal) < 0) {
+		printk("Failed to create device file!(%s)!\n",
+			dev_attr_front_afcal.attr.name);
+		ret = -ENODEV;
+		goto device_create_fail;
+	}
+	
 #if defined(CONFIG_GET_FRONT_MODULE_ID)	
 	if (device_create_file(cam_dev_front, &dev_attr_front_moduleid) < 0) {
 		printk("Failed to create device file!(%s)!\n",

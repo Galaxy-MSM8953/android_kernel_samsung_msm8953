@@ -757,7 +757,6 @@ struct s2mm005_data {
 	int prev_rid;
 	int cur_rid;
 	int water_det;
-	int booting_water_det;
 
 	u8 firm_ver[4];
 

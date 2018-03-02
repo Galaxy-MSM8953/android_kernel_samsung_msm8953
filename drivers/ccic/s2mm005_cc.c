@@ -385,10 +385,6 @@ void process_cc_water_det(void * data)
 	{
 		s2mm005_manual_LPM(usbpd_data, 0x9);
 	}
-
-	/* Record the first water detection */
-	if(usbpd_data->booting_water_det == 0)
-		usbpd_data->booting_water_det++;
 }
 
 //////////////////////////////////////////// ////////////////////////////////////

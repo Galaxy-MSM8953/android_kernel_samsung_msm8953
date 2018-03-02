@@ -547,7 +547,6 @@ static int muic_handle_ccic_ATTACH(muic_data_t *pmuic, CC_NOTI_ATTACH_TYPEDEF *p
 			muic_GPIO_control(1);
 #endif
 			mdev_com_to(pmuic, MUIC_PATH_USB_AP);
-			mdev_noti_attached(pdesc->mdev);
 			return 0;
 		}
 
