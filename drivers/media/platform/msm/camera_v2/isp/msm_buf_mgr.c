@@ -26,6 +26,8 @@
 #include <media/v4l2-ioctl.h>
 #include <media/v4l2-device.h>
 #include <media/videobuf2-core.h>
+#include <media/msm_camera.h>
+#include <media/msm_isp.h>
 
 #include "msm.h"
 #include "msm_buf_mgr.h"
@@ -85,8 +87,7 @@ struct msm_isp_bufq *msm_isp_get_bufq(
 
 	/* bufq_handle cannot be 0 */
 	if ((bufq_handle == 0) ||
-		bufq_index >= BUF_MGR_NUM_BUF_Q ||
-		(bufq_index > buf_mgr->num_buf_q))
+		(bufq_index >= buf_mgr->num_buf_q))
 		return NULL;
 
 	bufq = &buf_mgr->bufq[bufq_index];
@@ -473,8 +474,7 @@ static int msm_isp_buf_unprepare(struct msm_isp_buf_mgr *buf_mgr,
 
 
 static int msm_isp_get_buf(struct msm_isp_buf_mgr *buf_mgr, uint32_t id,
-	uint32_t bufq_handle, uint32_t buf_index,
-	struct msm_isp_buffer **buf_info)
+	uint32_t bufq_handle, struct msm_isp_buffer **buf_info)
 {
 	int rc = -1;
 	unsigned long flags;
@@ -524,12 +524,8 @@ static int msm_isp_get_buf(struct msm_isp_buf_mgr *buf_mgr, uint32_t id,
 		}
 		break;
 	case MSM_ISP_BUFFER_SRC_HAL:
-		if (MSM_ISP_INVALID_BUF_INDEX == buf_index)
-			vb2_buf = buf_mgr->vb2_ops->get_buf(
-				bufq->session_id, bufq->stream_id);
-		else
-			vb2_buf = buf_mgr->vb2_ops->get_buf_by_idx(
-				bufq->session_id, bufq->stream_id,  buf_index);
+		vb2_buf = buf_mgr->vb2_ops->get_buf(
+			bufq->session_id, bufq->stream_id);
 		if (vb2_buf) {
 			if (vb2_buf->v4l2_buf.index < bufq->num_bufs) {
 				*buf_info = &bufq->bufs[vb2_buf
@@ -1335,7 +1331,7 @@ static int msm_isp_buf_mgr_debug(struct msm_isp_buf_mgr *buf_mgr,
 	uint32_t debug_start_addr = 0;
 	uint32_t debug_end_addr = 0;
 	uint32_t debug_frame_id = 0;
-	enum msm_isp_buffer_state debug_state = MSM_ISP_BUFFER_STATE_UNUSED;
+	enum msm_isp_buffer_state debug_state;
 	unsigned long flags;
 	struct msm_isp_bufq *bufq = NULL;
 
@@ -1347,6 +1343,8 @@ static int msm_isp_buf_mgr_debug(struct msm_isp_buf_mgr *buf_mgr,
 
 	for (i = 0; i < BUF_MGR_NUM_BUF_Q; i++) {
 		bufq = &buf_mgr->bufq[i];
+		if (!bufq)
+			continue;
 
 		spin_lock_irqsave(&bufq->bufq_lock, flags);
 		if (!bufq->bufq_handle) {
