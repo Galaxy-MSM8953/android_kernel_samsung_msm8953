@@ -319,6 +319,7 @@ int com_to_usb_cp(muic_data_t *pmuic)
 	return ret;
 }
 
+#if defined(CONFIG_MUIC_UNIVERSAL_SM5705)
 int cable_redetection(muic_data_t *pmuic)
 {
 	switch (do_BCD_rescan(pmuic)) {
@@ -350,6 +351,7 @@ int cable_redetection(muic_data_t *pmuic)
 	
 	return 0;
 }
+#endif
 
 static int set_rustproof_mode(struct regmap_desc *pdesc, int op)
 {

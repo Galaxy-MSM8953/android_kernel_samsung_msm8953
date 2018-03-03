@@ -11,7 +11,9 @@ extern int com_to_usb(muic_data_t *pmuic);
 extern int com_to_uart(muic_data_t *pmuic);
 extern int com_to_audio(muic_data_t *pmuic);
 extern int com_to_uart_ap(muic_data_t *pmuic);
+#if defined(CONFIG_MUIC_UNIVERSAL_SM5705)
 extern int cable_redetection(muic_data_t *pmuic);
+#endif
 extern int switch_to_ap_usb(muic_data_t *pmuic);
 extern int switch_to_ap_uart(muic_data_t *pmuic);
 extern int switch_to_cp_uart(muic_data_t *pmuic);
