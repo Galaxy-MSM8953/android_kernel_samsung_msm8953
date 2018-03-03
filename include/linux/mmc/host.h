@@ -16,10 +16,12 @@
 #include <linux/device.h>
 #include <linux/devfreq.h>
 #include <linux/fault-inject.h>
+#include <linux/wakelock.h>
 
 #include <linux/mmc/core.h>
 #include <linux/mmc/card.h>
 #include <linux/mmc/pm.h>
+#include <linux/mmc/ring_buffer.h>
 
 #define MMC_AUTOSUSPEND_DELAY_MS	3000
 
@@ -434,12 +436,15 @@ struct mmc_host {
 #define MMC_CAP2_ASYNC_SDIO_IRQ_4BIT_MODE (1 << 20)
 /* Some hosts need additional tuning */
 #define MMC_CAP2_HS400_POST_TUNING	(1 << 21)
+#define MMC_CAP2_DETECT_ON_ERR  (1 << 22)
 #define MMC_CAP2_NONHOTPLUG	(1 << 25)	/*Don't support hotplug*/
 #define MMC_CAP2_CMD_QUEUE	(1 << 26)	/* support eMMC command queue */
 #define MMC_CAP2_SANITIZE       (1 << 27)               /* Support Sanitize */
 #define MMC_CAP2_SLEEP_AWAKE	(1 << 28)	/* Use Sleep/Awake (CMD5) */
 /* use max discard ignoring max_busy_timeout parameter */
 #define MMC_CAP2_MAX_DISCARD_SIZE	(1 << 29)
+#define MMC_CAP2_BKOPS_EN       (1 << 30)
+#define MMC_CAP2_CACHE_BARRIER		(1 << 31)
 
 	mmc_pm_flag_t		pm_caps;	/* supported pm features */
 
@@ -491,6 +496,8 @@ struct mmc_host {
 	int			claim_cnt;	/* "claim" nesting count */
 
 	struct delayed_work	detect;
+        struct wake_lock        detect_wake_lock;
+        const char              *wlock_name;
 	int			detect_change;	/* card detect flag */
 	struct mmc_slot		slot;
 
@@ -557,6 +564,7 @@ struct mmc_host {
 	} perf;
 	bool perf_enable;
 #endif
+	struct mmc_trace_buffer trace_buf;
 	enum dev_state dev_status;
 	bool			wakeup_on_idle;
 	struct mmc_cmdq_context_info	cmdq_ctx;
@@ -571,6 +579,8 @@ struct mmc_host {
 	 */
 	void *cmdq_private;
 	struct mmc_request	*err_mrq;
+        unsigned int            card_detect_cnt;
+        int                     pm_progress;    /* pm_notify is in progress */
 	unsigned long		private[0] ____cacheline_aligned;
 };
 

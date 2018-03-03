@@ -19,6 +19,9 @@
 #include <linux/cpu_pm.h>
 #include <linux/platform_device.h>
 #include <soc/qcom/scm.h>
+#ifdef CONFIG_SEC_AP_HEALTH
+#include <linux/sec_param.h>
+#endif
 
 #define MODULE_NAME "gladiator_error_reporting"
 
@@ -126,6 +129,48 @@ enum err_log {
 	ERR_LOG8,
 	STALLEN,
 };
+
+#ifdef CONFIG_SEC_AP_HEALTH
+static ap_health_t *p_health;
+
+static int update_gladiator_err_count(int gld, int obsrv)
+{
+	if (!p_health)
+		p_health = ap_health_data_read();
+
+	if (p_health) {
+		if (gld) {
+			p_health->cache.gld_err_cnt++;
+			p_health->daily_cache.gld_err_cnt++;
+		}
+		if (obsrv) {
+			p_health->cache.obsrv_err_cnt++;
+			p_health->daily_cache.obsrv_err_cnt++;
+		}
+		ap_health_data_write(p_health);
+	}
+		
+	return 0;
+}
+
+static int gladiator_sec_param_notifier_callback(
+	struct notifier_block *nfb, unsigned long action, void *data)
+{
+	switch (action) {
+		case SEC_PARAM_DRV_INIT_DONE:
+			p_health = ap_health_data_read();
+			break;
+		default:
+			return NOTIFY_DONE;
+	}
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block gladiator_sec_param_notifier = {
+	.notifier_call = gladiator_sec_param_notifier_callback,
+};
+#endif /* CONFIG_SEC_AP_HEALTH */
 
 static void clear_gladiator_error(void __iomem *gladiator_virt_base)
 {
@@ -458,6 +503,11 @@ static irqreturn_t msm_gladiator_isr(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 	pr_alert("GLADIATOR ERROR DETECTED\n");
+
+#ifdef CONFIG_SEC_AP_HEALTH
+	update_gladiator_err_count(gld_err_valid,obsrv_err_valid);
+#endif
+
 	pr_alert("GLADIATOR error log register data:\n");
 	for (err_log = ERR_LOG0; err_log <= ERR_LOG8; err_log++) {
 		/* skip log register 7 as its reserved */
@@ -611,6 +661,10 @@ static int init_gladiator_erp(void)
 		pr_info("Gladiator Error Reporting not available %d\n", ret);
 		return -ENODEV;
 	}
+
+#ifdef CONFIG_SEC_AP_HEALTH
+	sec_param_notifier_register(&gladiator_sec_param_notifier);
+#endif
 
 	return platform_driver_register(&gladiator_erp_driver);
 }

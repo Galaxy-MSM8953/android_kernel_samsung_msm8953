@@ -292,6 +292,16 @@ config MSM_CACHE_M4M_ERP64_PANIC_ON_UE
          Say 'Y' here to cause kernel panic when uncorrectable cache/M4M errors
          are detected.
 
+config MSM_L2_IA_DEBUG
+       bool "Enable MSM L2 Indirect Access Debug"
+       depends on DEBUG_FS
+       default n
+       help
+         This option enables L2 indirect access debug
+         capability. It exposes L2 indirect access
+         debugfs interface to get/set data, address,
+         and target cpus.
+		 
 config MSM_RPM_SMD
 	bool "RPM driver using SMD protocol"
 	help
@@ -823,5 +833,113 @@ config QCOM_SMCINVOKE
 	  communication between QSEE and HLOS.
 
 source "drivers/soc/qcom/memshare/Kconfig"
+
+source "drivers/soc/qcom/Kconfig.sec"
+
+config TIMA_RKP
+       bool "Enable RKP (Realtime Kernel Protection) TIMA feature"
+       default n
+
+config TIMA_RKP_30
+       bool "Enable RKP TIMA 3.0 features"
+       depends on (ARCH_MSM8974PRO || ARCH_MSM8226 || ARCH_MSM8926 || ARCH_MSM8926_LTE)
+       depends on TIMA_RKP
+       default y
+       help
+         RKP 3.0 features, enabled for msm8974pro only
+
+config TIMA_RKP_COHERENT_TT
+       bool
+       depends on TIMA_RKP_30
+       depends on ARCH_MSM8974PRO
+       default y
+       help
+         RKP cache coherency feature- depends on corresponding TZ RKP code!!!
+
+config TIMA_RKP_L1_TABLES
+       bool
+       depends on TIMA_RKP
+       default y
+       help
+         TIMA taking over management of L1 tables.
+
+config TIMA_RKP_L2_TABLES
+       bool
+       depends on TIMA_RKP
+       default y
+       help
+         TIMA taking over management L2 tables too.
+
+config TIMA_RKP_L2_GROUP
+	bool
+	depends on TIMA_RKP_L2_TABLES
+	depends on TIMA_RKP_COHERENT_TT
+	default y
+	help
+	 TIMA grouping page table writes; do only with cache coherence
+
+config TIMA_RKP_LAZY_MMU
+	bool
+	depends on TIMA_RKP_L2_TABLES
+	default y
+	help
+	 TIMA lazy MMU for L2 pages
+
+config TIMA_RKP_EMUL_CP15_INSTR
+	bool
+	depends on TIMA_RKP_30
+	depends on ARCH_MSM8974PRO
+	default y
+	help
+	 RKP emulates CP15 instructions affecting MMU
+
+config TIMA_RKP_DEBUG
+       bool
+       depends on TIMA_RKP
+       default n
+       help
+         TIMA debug infrastructure.
+
+config TIMA
+       bool "Enable TIMA feature"
+       default n
+       help
+         Enables TIMA
+
+config TIMA_LKMAUTH
+       bool "Enable LKM authentication TIMA feature"
+       default n
+       depends on MODULES
+       help
+         TIMA authenticates loaded kernel modules. Disable it if you don't
+         want TIMA enabled.
+
+config TIMA_LKMAUTH_CODE_PROT
+       bool "Support kernel Module"
+       depends on MODULES
+       default n
+       help
+         When enabled, this feature will mark all Executable sections in an
+         LKM as RO
+
+config TIMA_TEST_INFRA
+       tristate "Testing infrastructure for TIMA"
+       default n
+       help
+         Kernel bits of the TIMA test infrastructure
+
+config TIMA_UEVENT
+       bool "Uevent message propagation for TIMA"
+       depends on TIMA
+       default n
+       help
+         Uevent messages for TIMA PKM/LKM
+
+config TIMA_LOG
+       bool "Log dumping support for TIMA"
+       depends on TIMA
+       default n
+       help
+         TIMA Log dumping support
 
 endif # ARCH_MSM

@@ -26,4 +26,10 @@ void msm_trigger_wdog_bite(void);
 static inline void msm_trigger_wdog_bite(void) { }
 #endif
 
+#ifdef CONFIG_USER_RESET_DEBUG_TEST
+extern void force_watchdog_bark(void);
+#else
+static inline void force_watchdog_bark(void) { }
+#endif
+
 #endif

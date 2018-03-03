@@ -493,6 +493,7 @@ int param_set_copystring(const char *val, const struct kernel_param *kp)
 		return -ENOSPC;
 	}
 	strcpy(kps->string, val);
+	pr_info("%s \n", __func__);
 	return 0;
 }
 EXPORT_SYMBOL(param_set_copystring);

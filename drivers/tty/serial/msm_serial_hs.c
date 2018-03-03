@@ -253,6 +253,7 @@ struct msm_hs_port {
 	struct pinctrl_state *gpio_state_suspend;
 	bool flow_control;
 	enum msm_hs_pm_state pm_state;
+	enum msm_hs_pm_state prev_pm_state;
 	atomic_t client_count;
 	bool obs; /* out of band sleep flag */
 	atomic_t client_req_state;
@@ -410,7 +411,7 @@ static void msm_hs_resource_vote(struct msm_hs_port *msm_uport)
 	struct uart_port *uport = &(msm_uport->uport);
 	ret = pm_runtime_get_sync(uport->dev);
 	if (ret < 0 || msm_uport->pm_state != MSM_HS_PM_ACTIVE) {
-		MSM_HS_WARN("%s:%s runtime callback not invoked ret:%d st:%d",
+		MSM_HS_WARN("%s:%s runtime callback not invoked ret:%d st:%d\n",
 			__func__, dev_name(uport->dev), ret,
 					msm_uport->pm_state);
 		msm_hs_pm_resume(uport->dev);
@@ -2723,6 +2724,10 @@ static int msm_hs_startup(struct uart_port *uport)
 	spin_unlock_irqrestore(&uport->lock, flags);
 
 	msm_hs_resource_unvote(msm_uport);
+
+	/* enable clock (runtime suspend doen't work during holding the clock */
+	msm_hs_request_clock_on(uport);
+
 	return 0;
 
 sps_disconnect_rx:
@@ -2882,6 +2887,8 @@ struct msm_serial_hs_platform_data
 		pr_err("Error: Invalid UART BAM RX EP Pipe Index.\n");
 		return ERR_PTR(-EINVAL);
 	}
+
+	pdata->unuse_pm = of_property_read_bool(node, "qcom,unuse-pm");
 
 	pr_debug("tx_ep_pipe_index:%d rx_ep_pipe_index:%d\n"
 		"tx_gpio:%d rx_gpio:%d rfr_gpio:%d cts_gpio:%d",
@@ -3131,7 +3138,7 @@ static void obs_manage_irq(struct msm_hs_port *msm_uport, bool en)
 	}
 }
 
-static void msm_hs_pm_suspend(struct device *dev)
+static int _msm_hs_pm_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct msm_hs_port *msm_uport = get_matching_hs_port(pdev);
@@ -3162,13 +3169,25 @@ static void msm_hs_pm_suspend(struct device *dev)
 		"%s: PM State Suspended client_count %d\n", __func__,
 								client_count);
 	mutex_unlock(&msm_uport->mtx);
-	return;
+	return 0;
 err_suspend:
 	pr_err("%s(): invalid uport", __func__);
-	return;
+	return 0;
 }
 
-static int msm_hs_pm_resume(struct device *dev)
+static int msm_hs_pm_suspend(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct msm_hs_port *msm_uport = get_matching_hs_port(pdev);
+
+	msm_uport->prev_pm_state = msm_uport->pm_state;
+	if (msm_uport->prev_pm_state == MSM_HS_PM_ACTIVE)
+		return _msm_hs_pm_suspend(dev);
+
+	return 0;
+}
+
+static int _msm_hs_pm_resume(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct msm_hs_port *msm_uport = get_matching_hs_port(pdev);
@@ -3210,6 +3229,17 @@ static int msm_hs_pm_resume(struct device *dev)
 exit_pm_resume:
 	mutex_unlock(&msm_uport->mtx);
 	return ret;
+}
+
+static int msm_hs_pm_resume(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct msm_hs_port *msm_uport = get_matching_hs_port(pdev);
+
+	if (msm_uport->prev_pm_state == MSM_HS_PM_ACTIVE)
+		return _msm_hs_pm_resume(dev);
+
+	return 0;
 }
 
 #ifdef CONFIG_PM
@@ -3282,19 +3312,19 @@ static void  msm_serial_hs_rt_init(struct uart_port *uport)
 	pm_runtime_use_autosuspend(uport->dev);
 	mutex_lock(&msm_uport->mtx);
 	msm_uport->pm_state = MSM_HS_PM_SUSPENDED;
+	msm_uport->prev_pm_state = MSM_HS_PM_SUSPENDED;
 	mutex_unlock(&msm_uport->mtx);
 	pm_runtime_enable(uport->dev);
 }
 
 static int msm_hs_runtime_suspend(struct device *dev)
 {
-	msm_hs_pm_suspend(dev);
-	return 0;
+	return _msm_hs_pm_suspend(dev);
 }
 
 static int msm_hs_runtime_resume(struct device *dev)
 {
-	return msm_hs_pm_resume(dev);
+	return _msm_hs_pm_resume(dev);
 }
 #else
 static void  msm_serial_hs_rt_init(struct uart_port *uport) {}
@@ -3635,6 +3665,9 @@ static void msm_hs_shutdown(struct uart_port *uport)
 	int data;
 	unsigned long flags;
 
+	/* disable clock */
+	msm_hs_request_clock_off(uport);
+
 	if (is_use_low_power_wakeup(msm_uport))
 		irq_set_irq_wake(msm_uport->wakeup.irq, 0);
 
@@ -3745,6 +3778,8 @@ static const struct dev_pm_ops msm_hs_dev_pm_ops = {
 	.runtime_idle = NULL,
 	.suspend_noirq = msm_hs_pm_sys_suspend_noirq,
 	.resume_noirq = msm_hs_pm_sys_resume_noirq,
+	.suspend = msm_hs_pm_suspend,
+	.resume = msm_hs_pm_resume,
 };
 
 static struct platform_driver msm_serial_hs_platform_driver = {

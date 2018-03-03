@@ -47,6 +47,22 @@
 #include <asm/suspend.h>
 #include "lpm-levels.h"
 #include "lpm-workarounds.h"
+#include <linux/sec_debug.h>
+#ifdef CONFIG_SEC_PM
+#include <linux/regulator/consumer.h>
+#include <linux/qpnp/pin.h>
+#endif
+
+#ifdef CONFIG_SEC_PM_DEBUG
+#include <linux/sec-pinmux.h>
+#ifdef CONFIG_SEC_GPIO_DVS
+#include <linux/secgpio_dvs.h>
+#endif
+#endif
+
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 #include <trace/events/power.h>
 #define CREATE_TRACE_POINTS
 #include <trace/events/trace_msm_low_power.h>
@@ -107,6 +123,12 @@ static struct notifier_block __refdata lpm_cpu_nblk = {
 	.notifier_call = lpm_cpu_callback,
 };
 
+#ifdef CONFIG_SEC_PM_DEBUG
+static int msm_pm_sleep_sec_debug;
+module_param_named(secdebug,
+	msm_pm_sleep_sec_debug, int, S_IRUGO | S_IWUSR | S_IWGRP);
+#endif
+
 static bool menu_select;
 module_param_named(
 	menu_select, menu_select, bool, S_IRUGO | S_IWUSR | S_IWGRP
@@ -125,6 +147,10 @@ module_param_named(
 static bool sleep_disabled;
 module_param_named(sleep_disabled,
 	sleep_disabled, bool, S_IRUGO | S_IWUSR | S_IWGRP);
+
+#ifdef CONFIG_SEC_PM
+extern int wakeup_gpio_irq_flag;
+#endif
 
 s32 msm_cpuidle_get_deep_idle_latency(void)
 {
@@ -635,6 +661,9 @@ static int cluster_configure(struct lpm_cluster *cluster, int idx,
 	}
 
 	if (idx != cluster->default_level) {
+		sec_debug_cluster_lpm_log(cluster->cluster_name, idx,
+			cluster->num_children_in_sync.bits[0],
+			cluster->child_cpus.bits[0], from_idle, 1);
 		update_debug_pc_event(CLUSTER_ENTER, idx,
 			cluster->num_children_in_sync.bits[0],
 			cluster->child_cpus.bits[0], from_idle);
@@ -804,6 +833,10 @@ static void cluster_unprepare(struct lpm_cluster *cluster,
 	trace_cluster_exit(cluster->cluster_name, cluster->last_level,
 			cluster->num_children_in_sync.bits[0],
 			cluster->child_cpus.bits[0], from_idle);
+
+	sec_debug_cluster_lpm_log(cluster->cluster_name, cluster->last_level,
+			cluster->num_children_in_sync.bits[0],
+			cluster->child_cpus.bits[0], from_idle, 0);
 
 	last_level = cluster->last_level;
 	cluster->last_level = cluster->default_level;
@@ -1026,6 +1059,7 @@ static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 	cpu_prepare(cluster, idx, true);
 	cluster_prepare(cluster, cpumask, idx, true, ktime_to_ns(ktime_get()));
 
+	sec_debug_cpu_lpm_log(dev->cpu, idx, 0, 1);
 	trace_cpu_idle_enter(idx);
 	lpm_stats_cpu_enter(idx, start_time);
 
@@ -1037,17 +1071,35 @@ static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 		goto exit;
 
 	if (!use_psci) {
-		if (idx > 0)
+		if (idx > 0) {
 			update_debug_pc_event(CPU_ENTER, idx, 0xdeaffeed,
 					0xdeaffeed, true);
+#ifdef CONFIG_SEC_DEBUG
+		secdbg_sched_msg("+Idle(%s)", cluster->cpu->levels[idx].name);
+#endif
+		}
 		success = msm_cpu_pm_enter_sleep(cluster->cpu->levels[idx].mode,
 				true);
 
-		if (idx > 0)
+		if (idx > 0){
 			update_debug_pc_event(CPU_EXIT, idx, success,
 							0xdeaffeed, true);
+#ifdef CONFIG_SEC_DEBUG
+			secdbg_sched_msg("-Idle(%s)", cluster->cpu->levels[idx].name);
+#endif
+		}
+
 	} else {
+
+#ifdef CONFIG_SEC_DEBUG
+			secdbg_sched_msg("+Idle(%s)", cluster->cpu->levels[idx].name);
+#endif
+
 		success = psci_enter_sleep(cluster, idx, true);
+
+#ifdef CONFIG_SEC_DEBUG
+			secdbg_sched_msg("-Idle(%s)", cluster->cpu->levels[idx].name);
+#endif
 	}
 
 exit:
@@ -1063,6 +1115,7 @@ exit:
 
 	sched_set_cpu_cstate(smp_processor_id(), 0, 0, 0);
 	trace_cpu_idle_exit(idx, success);
+	sec_debug_cpu_lpm_log(dev->cpu, idx, success, 0);
 	end_time = ktime_to_ns(ktime_get()) - start_time;
 	dev->last_residency = do_div(end_time, 1000);
 	local_irq_enable();
@@ -1250,6 +1303,35 @@ static int lpm_suspend_prepare(void)
 {
 	suspend_in_progress = true;
 	msm_mpm_suspend_prepare();
+
+#ifdef CONFIG_SEC_GPIO_DVS
+	/************************ Caution !!! ****************************
+	 * This functiongit a must be located in appropriate SLEEP position
+	 * in accordance with the specification of each BB vendor.
+	 ************************ Caution !!! ****************************/
+	gpio_dvs_check_sleepgpio();
+#ifdef SECGPIO_SLEEP_DEBUGGING
+	/************************ Caution !!! ****************************/
+	/* This func. must be located in an appropriate position for GPIO SLEEP debugging
+     * in accordance with the specification of each BB vendor, and
+     * the func. must be called after calling the function "gpio_dvs_check_sleepgpio"
+     */
+	/************************ Caution !!! ****************************/
+	gpio_dvs_set_sleepgpio();
+#endif
+#endif
+
+#ifdef CONFIG_SEC_PM
+	regulator_showall_enabled();
+#endif
+
+#ifdef CONFIG_SEC_PM_DEBUG
+	if (msm_pm_sleep_sec_debug) {
+		msm_gpio_print_enabled();
+		qpnp_debug_suspend_show(); //refer qpnp-pin.c 
+	}
+#endif
+
 	lpm_stats_suspend_enter();
 
 	return 0;
@@ -1281,9 +1363,13 @@ static int lpm_suspend_enter(suspend_state_t state)
 	}
 	cpu_prepare(cluster, idx, false);
 	cluster_prepare(cluster, cpumask, idx, false, 0);
-	if (idx > 0)
+	if (idx > 0) {
 		update_debug_pc_event(CPU_ENTER, idx, 0xdeaffeed,
 					0xdeaffeed, false);
+#ifdef CONFIG_SEC_DEBUG
+		secdbg_sched_msg("+Suspend(s:%d)", state);
+#endif
+	}
 
 	/*
 	 * Print the clocks which are enabled during system suspend
@@ -1293,15 +1379,22 @@ static int lpm_suspend_enter(suspend_state_t state)
 	 */
 	clock_debug_print_enabled();
 
+#ifdef CONFIG_SEC_PM
+	wakeup_gpio_irq_flag = 1;
+#endif
+
 	if (!use_psci)
 		msm_cpu_pm_enter_sleep(cluster->cpu->levels[idx].mode, false);
 	else
 		psci_enter_sleep(cluster, idx, true);
 
-	if (idx > 0)
+	if (idx > 0)	{
 		update_debug_pc_event(CPU_EXIT, idx, true, 0xdeaffeed,
 					false);
-
+#ifdef CONFIG_SEC_DEBUG
+		secdbg_sched_msg("-Suspend(s:%d)", state);
+#endif
+	}
 	cluster_unprepare(cluster, cpumask, idx, false, 0);
 	cpu_unprepare(cluster, idx, false);
 	return 0;
