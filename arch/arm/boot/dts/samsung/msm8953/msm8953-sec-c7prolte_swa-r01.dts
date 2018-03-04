@@ -428,7 +428,7 @@
 
 	sound {
 		compatible = "qcom,msm8952-rt5665-audio-codec";
-		qcom,model = "msm8952-rt5665-snd-card";
+		qcom,model = "msm8952-snd-card";
 		reg = <0xc051000 0x4>,
 		      <0xc051004 0x4>,
 		      <0xc055000 0x4>,
