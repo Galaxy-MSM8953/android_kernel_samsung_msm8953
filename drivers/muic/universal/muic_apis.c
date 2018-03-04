@@ -319,7 +319,7 @@ int com_to_usb_cp(muic_data_t *pmuic)
 	return ret;
 }
 
-#if defined(CONFIG_MUIC_UNIVERSAL_SM5705)
+#if defined(CONFIG_MUIC_SUPPORT_CCIC) && defined(CONFIG_MUIC_UNIVERSAL_SM5705_AFC)
 int cable_redetection(muic_data_t *pmuic)
 {
 	switch (do_BCD_rescan(pmuic)) {
