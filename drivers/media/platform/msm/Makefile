@@ -5,5 +5,9 @@
 obj-$(CONFIG_MSM_VIDC_V4L2) += vidc/
 obj-y += broadcast/
 obj-$(CONFIG_DVB_MPQ) += dvb/
-obj-$(CONFIG_MSMB_CAMERA) += camera_v2/
+ifneq ($(CONFIG_SEC_J7POPLTE_USA_SPR),y)
+    obj-$(CONFIG_MSMB_CAMERA) += camera_v2/
+else
+    obj-$(CONFIG_MSMB_CAMERA) += camera_v2_j7poplte/
+endif
 obj-y += sde/
