@@ -29,7 +29,9 @@
 #include "muic-internal.h"
 #include "muic_regmap.h"
 #include "muic_i2c.h"
+#ifdef CONFIG_MUIC_SUPPORT_CCIC
 #include <linux/ccic/s2mm005.h>
+#endif
 #include "muic_apis.h"
 #include "../../battery_v2/include/sec_charging_common.h"
 
@@ -573,9 +575,11 @@ int muic_afc_set_voltage(int voltage)
 	case 9:
 	case 12:
 		pdata->afc_limit_voltage = false;
+#ifdef CONFIG_MUIC_SUPPORT_CCIC
 		if (gpmuic->ccic_rp == Rp_56K) {
 			muic_restart_afc();
 		}
+#endif
 		break;
 	default:
 		pr_warn("%s:%s invalid value\n", MUIC_DEV_NAME, __func__);
