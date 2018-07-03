@@ -62,10 +62,6 @@ int msm_fled_flash_on_set_current_default(ext_pmic_flash_ctrl_t *flash_ctrl)
 }
 #endif
 
-#if defined(CONFIG_LEDS_KTD2692)
-extern void ktd2692_flash_on(unsigned data);
-#endif
-
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
@@ -574,44 +570,22 @@ static int32_t msm_flash_init(
 	return 0;
 }
 
+#ifdef CONFIG_COMPAT
 static int32_t msm_flash_init_prepare(
 	struct msm_flash_ctrl_t *flash_ctrl,
 	struct msm_flash_cfg_data_t *flash_data)
 {
-#ifdef CONFIG_COMPAT
-	struct msm_flash_cfg_data_t flash_data_k;
-	struct msm_flash_init_info_t flash_init_info;
-	int32_t i = 0;
-	if(!is_compat_task()) {
-		/*for 64-bit usecase,it need copy the data to local memory*/
-		flash_data_k.cfg_type = flash_data->cfg_type;
-		for (i = 0; i < MAX_LED_TRIGGERS; i++) {
-			flash_data_k.flash_current[i] =
-				flash_data->flash_current[i];
-			flash_data_k.flash_duration[i] =
-				flash_data->flash_duration[i];
-		}
-
-		flash_data_k.cfg.flash_init_info = &flash_init_info;
-		if (copy_from_user(&flash_init_info,
-			(void *)(flash_data->cfg.flash_init_info),
-			sizeof(struct msm_flash_init_info_t))) {
-			pr_err("%s copy_from_user failed %d\n",
-				__func__, __LINE__);
-			return -EFAULT;
-		}
-		return msm_flash_init(flash_ctrl, &flash_data_k);
-	}
-	/*
-	 * for 32-bit usecase,it already copy the userspace
-	 * data to local memory in msm_flash_subdev_do_ioctl()
-	 * so here do not need copy from user
-	 */
 	return msm_flash_init(flash_ctrl, flash_data);
+}
 #else
+static int32_t msm_flash_init_prepare(
+	struct msm_flash_ctrl_t *flash_ctrl,
+	struct msm_flash_cfg_data_t *flash_data)
+{
 	struct msm_flash_cfg_data_t flash_data_k;
 	struct msm_flash_init_info_t flash_init_info;
 	int32_t i = 0;
+
 	flash_data_k.cfg_type = flash_data->cfg_type;
 	for (i = 0; i < MAX_LED_TRIGGERS; i++) {
 		flash_data_k.flash_current[i] =
@@ -629,8 +603,8 @@ static int32_t msm_flash_init_prepare(
 			return -EFAULT;
 		}
 	return msm_flash_init(flash_ctrl, &flash_data_k);
-#endif
 }
+#endif
 
 static int32_t msm_flash_low(
 	struct msm_flash_ctrl_t *flash_ctrl,
@@ -738,96 +712,34 @@ static int32_t msm_flash_config(struct msm_flash_ctrl_t *flash_ctrl,
 
 	switch (flash_data->cfg_type) {
 	case CFG_FLASH_INIT:
-		if(flash_data->flash_position == BACK_FLASH)
-		{
 			rc = msm_flash_init_prepare(flash_ctrl, flash_data);
-		}
-		else if(flash_data->flash_position == FRONT_FLASH)
-		{
-#if defined(CONFIG_LEDS_KTD2692_FOR_FRONT)
-			ktd2692_flash_on(0);
-			CDBG("Ktd2692 led turn off: CFG_FLASH_INIT\n");
-#endif
-			rc = 0;
-			
-		}
 		break;
 	case CFG_FLASH_RELEASE:
 		if (flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT)
-		{
-			if(flash_data->flash_position == BACK_FLASH)
-			{
 				rc = flash_ctrl->func_tbl->camera_flash_release(
 					flash_ctrl);
-			}
-			else if(flash_data->flash_position == FRONT_FLASH)
-			{
-#if defined(CONFIG_LEDS_KTD2692_FOR_FRONT)
-				ktd2692_flash_on(0);
-				CDBG("Ktd2692 led turn off: CFG_FLASH_RELEASE\n");
-#endif
-				rc = 0;
-			}
-		}
 		break;
 	case CFG_FLASH_OFF:
 		if (flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT)
-		{
-			if(flash_data->flash_position == BACK_FLASH)
-			{
 				rc = flash_ctrl->func_tbl->camera_flash_off(
 					flash_ctrl, flash_data);
-			}
-			else if(flash_data->flash_position == FRONT_FLASH)
-			{
-#if defined(CONFIG_LEDS_KTD2692_FOR_FRONT)
-				ktd2692_flash_on(0);
-				CDBG("Ktd2692 led turn off: CFG_FLASH_OFF\n");
-#endif
-				rc = 0;
-			}
-		}
 		break;
 	case CFG_FLASH_LOW:
 		if (flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT)
-		{
-			if(flash_data->flash_position == BACK_FLASH)
-			{
 				rc = flash_ctrl->func_tbl->camera_flash_low(
 					flash_ctrl, flash_data);
-			}
-			else if(flash_data->flash_position == FRONT_FLASH)
-			{
-#if defined(CONFIG_LEDS_KTD2692_FOR_FRONT)
-				ktd2692_flash_on(1);
-				CDBG("Ktd2692 led turn on:CFG_FLASH_LOW\n");
-#endif
-				rc = 0;
-			}
-		}
 		break;
 	case CFG_FLASH_HIGH:
-		if (flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT && flash_data->flash_position == BACK_FLASH)
+		if (flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT)
 			rc = flash_ctrl->func_tbl->camera_flash_high(
 				flash_ctrl, flash_data);
 		break;
 	case CFG_FLASH_TORCH:
 		if (flash_ctrl->flash_state == MSM_CAMERA_FLASH_INIT)
 		{
-			if(flash_data->flash_position == BACK_FLASH)
-			{
 				rc = flash_ctrl->func_tbl->camera_flash_torch(
 					flash_ctrl, flash_data);
 			}
-			else if(flash_data->flash_position == FRONT_FLASH)
-			{
-#if defined(CONFIG_LEDS_KTD2692_FOR_FRONT)
-				ktd2692_flash_on(1);
-				CDBG("Ktd2692 led turn on:CFG_FLASH_TORCH\n");
-#endif
-				rc = 0;			
-			}
-		}
 		break;
 	default:
 		rc = -EFAULT;
@@ -930,7 +842,7 @@ static int32_t msm_ext_flash_low(
 	ext_pmic_flash_ctrl_t led_ctrl;
 
 	memset(&led_ctrl, 0, sizeof(ext_pmic_flash_ctrl_t));
-	if (flash_ctrl->ext_pmic_func_tbl.ext_pmic_pre_flash_on)
+	if (flash_ctrl->ext_pmic_func_tbl.ext_pmic_torch_on)
 	{
 		led_ctrl.index = 0;
 
@@ -1010,12 +922,7 @@ static int32_t msm_ext_flash_torch(
 	memset(&led_ctrl, 0, sizeof(ext_pmic_flash_ctrl_t));
 	if (flash_ctrl->ext_pmic_func_tbl.ext_pmic_torch_on)
 	{
-		led_ctrl.index = 0;
 		rc = flash_ctrl->ext_pmic_func_tbl.ext_pmic_torch_on(&led_ctrl);
-#if defined(CONFIG_DUAL_LEDS_FLASH)
-		led_ctrl.index = 1;
-		rc = flash_ctrl->ext_pmic_func_tbl.ext_pmic_torch_on(&led_ctrl);
-#endif
 	}
 
 	CDBG("Exit %s\n", __func__);
@@ -1407,7 +1314,6 @@ static long msm_flash_subdev_do_ioctl(
 		flash_data.flash_current[i] = u32->flash_current[i];
 		flash_data.flash_duration[i] = u32->flash_duration[i];
 	}
-	flash_data.flash_position = u32->flash_position;
 	switch (cmd) {
 	case VIDIOC_MSM_FLASH_CFG32:
 		cmd = VIDIOC_MSM_FLASH_CFG;

@@ -15,10 +15,6 @@
 #include "msm_isp_util.h"
 #include "msm_isp_axi_util.h"
 
-#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
-#include "msm_sensor.h"
-#endif
-
 #define HANDLE_TO_IDX(handle) (handle & 0xFF)
 #define ISP_SOF_DEBUG_COUNT 5
 
@@ -2109,117 +2105,14 @@ int msm_isp_axi_halt(struct vfe_device *vfe_dev,
 	struct msm_vfe_axi_halt_cmd *halt_cmd)
 {
 	int rc = 0;
-#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
-	struct cam_hw_param *hw_param = NULL;
-	uint32_t *hw_cam_position = NULL;
-	uint32_t *hw_cam_secure = NULL;
-#endif
 
 	if (atomic_read(&vfe_dev->error_info.overflow_state) ==
 		OVERFLOW_DETECTED) {
-		pr_err("%s: VFE%d Bus overflow detected: start recovery!\n",
+		ISP_DBG("%s: VFE%d already halted, direct return\n",
 			__func__, vfe_dev->pdev->id);
-#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
-		msm_is_sec_get_sensor_position(&hw_cam_position);
-		if (hw_cam_position != NULL) {
-			switch(*hw_cam_position) {
-				case BACK_CAMERA_B:
-					if (!msm_is_sec_get_rear_hw_param(&hw_param)) {
-						if (hw_param != NULL && (hw_param->mipi_chk == FALSE)) {
-							switch (hw_param->comp_chk) {
-								case TRUE:
-									pr_err("[HWB_DBG][R][MIPI_C] Err\n");
-									hw_param->mipi_comp_err_cnt++;
-									hw_param->mipi_chk = TRUE;
-									hw_param->need_update_to_file = TRUE;
-									break;
-
-								case FALSE:
-									pr_err("[HWB_DBG][R][MIPI_S] Err\n");
-									hw_param->mipi_sensor_err_cnt++;
-									hw_param->mipi_chk = TRUE;
-									hw_param->need_update_to_file = TRUE;
-									break;
-
-								default:
-									pr_err("[HWB_DBG][R][MIPI] Unsupport\n");
-									break;
-							}
-						}
-					}
-					break;
-
-				case FRONT_CAMERA_B:
-					msm_is_sec_get_secure_mode(&hw_cam_secure);
-					if (hw_cam_secure != NULL) {
-						switch(*hw_cam_secure) {
-							case FALSE:
-								if (!msm_is_sec_get_front_hw_param(&hw_param)) {
-									if (hw_param != NULL && (hw_param->mipi_chk == FALSE)) {
-										switch (hw_param->comp_chk) {
-											case TRUE:
-												pr_err("[HWB_DBG][F][MIPI_C] Err\n");
-												hw_param->mipi_comp_err_cnt++;
-												hw_param->mipi_chk = TRUE;
-												hw_param->need_update_to_file = TRUE;
-												break;
-
-											case FALSE:
-												pr_err("[HWB_DBG][F][MIPI_S] Err\n");
-												hw_param->mipi_sensor_err_cnt++;
-												hw_param->mipi_chk = TRUE;
-												hw_param->need_update_to_file = TRUE;
-												break;
-
-											default:
-												pr_err("[HWB_DBG][F][MIPI] Unsupport\n");
-												break;
-										}
-									}
-								}
-								break;
-
-							case TRUE:
-								if (!msm_is_sec_get_iris_hw_param(&hw_param)) {
-									if (hw_param != NULL && (hw_param->mipi_chk == FALSE)) {
-										switch (hw_param->comp_chk) {
-											case TRUE:
-												pr_err("[HWB_DBG][I][MIPI_C] Err\n");
-												hw_param->mipi_comp_err_cnt++;
-												hw_param->mipi_chk = TRUE;
-												hw_param->need_update_to_file = TRUE;
-												break;
-
-											case FALSE:
-												pr_err("[HWB_DBG][I][MIPI_S] Err\n");
-												hw_param->mipi_sensor_err_cnt++;
-												hw_param->mipi_chk = TRUE;
-												hw_param->need_update_to_file = TRUE;
-												break;
-
-											default:
-												pr_err("[HWB_DBG][I][MIPI] Unsupport\n");
-												break;
-										}
-									}
-								}
-								break;
-
-							default:
-								pr_err("[HWB_DBG][F_I][MIPI] Unsupport\n");
-								break;
-						}
-					}
-					break;
-
-				default:
-					pr_err("[HWB_DBG][NON][MIPI] Unsupport\n");
-					break;
-			}
-		}
-#endif
+		return rc;
 	}
-	
+
 	if (halt_cmd->overflow_detected) {
 		/*Store current IRQ mask*/
 		if (vfe_dev->error_info.overflow_recover_irq_mask0 == 0) {
@@ -2767,10 +2660,8 @@ static int msm_isp_stop_axi_stream(struct vfe_device *vfe_dev,
 			!vfe_dev->axi_data.src_info[intf].active) {
 			msm_isp_axi_stream_enable_cfg(vfe_dev, stream_info, 0);
 			stream_info->state = INACTIVE;
-		if (!vfe_dev->axi_data.src_info[intf].active) { 
 			vfe_dev->hw_info->vfe_ops.core_ops.reg_update(vfe_dev,
 				SRC_TO_INTF(stream_info->stream_src));
-		}
 
 			/*
 			 * Active bit is reset in disble_camif for PIX.

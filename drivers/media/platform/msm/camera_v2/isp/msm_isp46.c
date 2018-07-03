@@ -1455,7 +1455,6 @@ static void msm_vfe46_cfg_axi_ub_equal_slicing(
 		axi_data->hw_info->num_wm;
 	} else {
 		pr_err("%s: incorrect VFE device\n ", __func__);
-		return;
 	}
 	for (i = 0; i < axi_data->hw_info->num_wm; i++) {
 		msm_camera_io_w(ub_offset << 16 | (ub_equal_slice - 1),
@@ -1803,10 +1802,9 @@ static void msm_vfe46_stats_cfg_ub(struct vfe_device *vfe_dev)
 		ub_offset = VFE46_UB_SIZE_VFE1;
 	else if (vfe_dev->pdev->id == ISP_VFE0)
 		ub_offset = VFE46_UB_SIZE_VFE0;
-	else {
+	else
 		pr_err("%s: incorrect VFE device\n", __func__);
-		return;
-	}
+
 	for (i = 0; i < VFE46_NUM_STATS_TYPE; i++) {
 		ub_offset -= ub_size[i];
 		msm_camera_io_w(VFE46_STATS_BURST_LEN << 30 |

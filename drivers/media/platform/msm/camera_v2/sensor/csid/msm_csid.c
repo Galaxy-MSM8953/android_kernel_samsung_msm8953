@@ -1027,7 +1027,7 @@ static int msm_csid_get_clk_info(struct csid_device *csid_dev,
 	csid_dev->num_clk = count;
 
 	CDBG("%s: count = %d\n", __func__, count);
-	if (count <= 0) {
+	if (count == 0) {
 		pr_err("%s: no clocks found in device tree, count=%d",
 			__func__, count);
 		return -EINVAL;

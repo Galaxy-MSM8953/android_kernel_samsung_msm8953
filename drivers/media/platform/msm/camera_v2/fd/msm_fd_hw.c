@@ -923,13 +923,12 @@ void msm_fd_hw_put(struct msm_fd_device *fd)
  */
 static int msm_fd_hw_attach_iommu(struct msm_fd_device *fd)
 {
-	int ret = 0;
+	int ret;
 
 	mutex_lock(&fd->lock);
 
 	if (fd->iommu_attached_cnt == UINT_MAX) {
 		dev_err(fd->dev, "Max count reached! can not attach iommu\n");
-		ret = -1;
 		goto error;
 	}
 

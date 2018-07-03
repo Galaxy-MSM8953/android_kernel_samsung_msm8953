@@ -50,7 +50,7 @@ int msm_jpeg_platform_set_clk_rate(struct msm_jpeg_device *pgmn_dev,
 		long clk_rate)
 {
 	int rc = 0;
-	int msm_jpeg_idx;
+	uint32_t msm_jpeg_idx;
 
 	/* retrieve clock index from list of clocks */
 	msm_jpeg_idx = msm_jpeg_get_clock_index(pgmn_dev,

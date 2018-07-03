@@ -159,12 +159,6 @@ static int32_t msm_cci_set_clk_param(struct cci_device *cci_dev,
 			clk_params->hw_trdhld << 4 | clk_params->hw_tsp,
 			cci_dev->base + CCI_I2C_M1_MISC_CTL_ADDR);
 	}
-	else{
-		pr_err("%s:%d invalid master = %d",
-			__func__, __LINE__, master);
-		return -EINVAL;
-	}
-	
 	cci_dev->i2c_freq_mode[master] = i2c_freq_mode;
 	return 0;
 }
@@ -805,7 +799,7 @@ static int32_t msm_cci_i2c_read(struct v4l2_subdev *sd,
 	if (rc < 0) {
 		pr_err("%s:%d msm_cci_set_clk_param failed rc = %d\n",
 			__func__, __LINE__, rc);
-		goto ERROR;
+		return rc;
 	}
 
 	/*
@@ -1472,7 +1466,7 @@ request_gpio_failed:
 
 static int32_t msm_cci_release(struct v4l2_subdev *sd)
 {
-	int i = 0, rc = 0;
+	uint8_t i = 0, rc = 0;
 	struct cci_device *cci_dev;
 
 	cci_dev = v4l2_get_subdevdata(sd);
@@ -2092,15 +2086,15 @@ static int msm_cci_probe(struct platform_device *pdev)
 	}
 	new_cci_dev->irq = platform_get_resource_byname(pdev,
 					IORESOURCE_IRQ, "cci");
+	CDBG("%s line %d cci irq start %d end %d\n", __func__,
+		__LINE__,
+		(int) new_cci_dev->irq->start,
+		(int) new_cci_dev->irq->end);
 	if (!new_cci_dev->irq) {
 		pr_err("%s: no irq resource?\n", __func__);
 		rc = -ENODEV;
 		goto cci_no_resource;
 	}
-	CDBG("%s line %d cci irq start %d end %d\n", __func__,
-		__LINE__,
-		(int) new_cci_dev->irq->start,
-		(int) new_cci_dev->irq->end);
 	new_cci_dev->io = request_mem_region(new_cci_dev->mem->start,
 		resource_size(new_cci_dev->mem), pdev->name);
 	if (!new_cci_dev->io) {

@@ -2584,9 +2584,8 @@ static int msm_cpp_validate_input(unsigned int cmd, void *arg,
 		}
 
 		*ioctl_ptr = arg;
-		if (((*ioctl_ptr) == NULL) ||
-			((*ioctl_ptr)->ioctl_ptr == NULL) ||
-			((*ioctl_ptr)->len == 0)) {
+		if ((*ioctl_ptr == NULL) ||
+			(*ioctl_ptr)->ioctl_ptr == NULL) {
 			pr_err("Error invalid ioctl argument cmd %u\n", cmd);
 			return -EINVAL;
 		}
@@ -3421,9 +3420,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 	struct msm_cpp_stream_buff_info_t k_cpp_buff_info;
 	struct msm_cpp_frame_info32_t k32_frame_info;
 	struct msm_cpp_frame_info_t k64_frame_info;
-	struct msm_camera_smmu_attach_type kb_cpp_smmu_attach_info;
 	uint32_t identity_k = 0;
-	bool is_copytouser_req = true;
 	void __user *up = (void __user *)arg;
 
 	if (sd == NULL) {
@@ -3727,23 +3724,11 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 		break;
 	}
 	case VIDIOC_MSM_CPP_IOMMU_ATTACH32:
-	case VIDIOC_MSM_CPP_IOMMU_DETACH32:
-	{
-		if ((kp_ioctl.len != sizeof(struct msm_camera_smmu_attach_type))
-			|| (copy_from_user(&kb_cpp_smmu_attach_info,
-				(void __user *)kp_ioctl.ioctl_ptr,
-				sizeof(kb_cpp_smmu_attach_info)))) {
-			mutex_unlock(&cpp_dev->mutex);
-			return -EINVAL;
-		}
-
-		kp_ioctl.ioctl_ptr = (void *)&kb_cpp_smmu_attach_info;
-		is_copytouser_req = false;
-		cmd = (cmd == VIDIOC_MSM_CPP_IOMMU_ATTACH32) ?
-			VIDIOC_MSM_CPP_IOMMU_ATTACH :
-			VIDIOC_MSM_CPP_IOMMU_DETACH;
+		cmd = VIDIOC_MSM_CPP_IOMMU_ATTACH;
 		break;
-	}
+	case VIDIOC_MSM_CPP_IOMMU_DETACH32:
+		cmd = VIDIOC_MSM_CPP_IOMMU_DETACH;
+		break;
 	case MSM_SD_NOTIFY_FREEZE:
 		break;
 	case MSM_SD_UNNOTIFY_FREEZE:
@@ -3754,8 +3739,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 	default:
 		pr_err_ratelimited("%s: unsupported compat type :%x LOAD %lu\n",
 				__func__, cmd, VIDIOC_MSM_CPP_LOAD_FIRMWARE);
-		mutex_unlock(&cpp_dev->mutex);
-		return -EINVAL;
+		break;
 	}
 
 	mutex_unlock(&cpp_dev->mutex);
@@ -3786,7 +3770,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 	default:
 		pr_err_ratelimited("%s: unsupported compat type :%d\n",
 				__func__, cmd);
-		return -EINVAL;		
+		break;
 	}
 
 	up32_ioctl.id = kp_ioctl.id;

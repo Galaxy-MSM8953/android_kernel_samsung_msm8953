@@ -2354,7 +2354,6 @@ void msm_isp_start_error_recovery(struct vfe_device *vfe_dev)
 		vfe_dev->error_info.overflow_recover_irq_mask1); 
 
         msm_isp_axi_halt(vfe_dev,&halt_cmd);
-        msm_isp_flush_tasklet(vfe_dev);
 
 	/* mask off other vfe if dual vfe is used */
 	if (vfe_dev->is_split) {
@@ -2372,7 +2371,6 @@ void msm_isp_start_error_recovery(struct vfe_device *vfe_dev)
 		other_vfe_dev->hw_info->vfe_ops.core_ops.get_irq_mask(other_vfe_dev,
 			&other_vfe_dev->error_info.overflow_recover_irq_mask0,
 			&other_vfe_dev->error_info.overflow_recover_irq_mask1);
-		msm_isp_flush_tasklet(other_vfe_dev);	
 		pr_err("%s vfe%d overflow_irq0_mask 0x%x overflow_irq1_mask 0x%x\n",
 			__func__, other_vfe_dev->pdev->id,
 			other_vfe_dev->error_info.overflow_recover_irq_mask0,
