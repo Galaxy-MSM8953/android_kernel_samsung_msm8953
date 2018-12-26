@@ -873,13 +873,53 @@ static int __from_user_pcc_coeff_v17(
 	struct mdp_pcc_data_v1_7_32 pcc_cfg_payload32;
 	struct mdp_pcc_data_v1_7 pcc_cfg_payload;
 
+#if 0 //plan_b
+	if(sizeof(struct mdp_pcc_coeff_v1_7_32) == sizeof(struct mdp_pcc_coeff_v1_7))
+	{
+		u32 payload32;
+		u64 payload;
+
+		if (copy_from_user(&payload32, &pcc_cfg32->cfg_payload, sizeof(u32))){
+			pr_err("failed to read payload32 val for pcc from user1\n");
+			return -EFAULT;
+		}
+
+		if (copy_from_user(&payload, &pcc_cfg->cfg_payload, sizeof(u64))){
+			pr_err("failed to read payload val for pcc from user1\n");
+			return -EFAULT;
+		}
+
+		if(copy_in_user((void __user*)(&payload), (void __user*)(u64)payload32, sizeof(struct mdp_pcc_coeff_v1_7))){
+			pr_err("failed to copy payload for pcc from user\n");
+			return -EFAULT;
+		}
+	}
+ else
+#endif
+{
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	u32 payload32;
+	u64 payload;
+
+	if (copy_from_user(&payload32, &pcc_cfg32->cfg_payload, sizeof(u32))){
+		pr_err("failed to copy payload for pcc from user1\n");
+		return -EFAULT;
+	}
+
+	if (copy_from_user(&pcc_cfg_payload32,
+						compat_ptr(payload32),
+			sizeof(struct mdp_pcc_data_v1_7_32))){
+		pr_err("failed to copy payload for pcc from user\n");
+		return -EFAULT;
+	}
+#else
 	if (copy_from_user(&pcc_cfg_payload32,
 			   compat_ptr(pcc_cfg32->cfg_payload),
 			   sizeof(struct mdp_pcc_data_v1_7_32))) {
 		pr_err("failed to copy payload for pcc from user\n");
 		return -EFAULT;
 	}
-
+#endif
 	memset(&pcc_cfg_payload, 0, sizeof(pcc_cfg_payload));
 	pcc_cfg_payload.r.b = pcc_cfg_payload32.r.b;
 	pcc_cfg_payload.r.g = pcc_cfg_payload32.r.g;
@@ -908,11 +948,25 @@ static int __from_user_pcc_coeff_v17(
 	pcc_cfg_payload.b.rg = pcc_cfg_payload32.b.rg;
 	pcc_cfg_payload.b.rgb = pcc_cfg_payload32.b.rgb;
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	if (copy_from_user(&payload, &pcc_cfg->cfg_payload, sizeof(u64))){
+			pr_err("failed to copy payload for pcc from user1\n");
+			return -EFAULT;
+	}
+
+	if (copy_to_user((void __user *)payload, &pcc_cfg_payload,
+			 sizeof(struct mdp_pcc_data_v1_7))) {
+		pr_err("failed to copy payload for pcc to user\n");
+		return -EFAULT;
+	}
+#else
 	if (copy_to_user(pcc_cfg->cfg_payload, &pcc_cfg_payload,
 			 sizeof(pcc_cfg_payload))) {
 		pr_err("failed to copy payload for pcc to user\n");
 		return -EFAULT;
 	}
+#endif
+}
 	return 0;
 }
 
@@ -969,14 +1023,54 @@ static int __to_user_pcc_coeff_v1_7(
 	struct mdp_pcc_data_v1_7_32 pcc_cfg_payload32;
 	struct mdp_pcc_data_v1_7 pcc_cfg_payload;
 
+#if 0//plan_b
+if(sizeof(struct mdp_pcc_coeff_v1_7_32) == sizeof(struct mdp_pcc_coeff_v1_7))
+{
+	 u32 payload32;
+	 u64 payload;
+
+	 if (copy_from_user(&payload32, &pcc_cfg32->cfg_payload, sizeof(u32))){
+	  pr_err("failed to read payload32 val for pcc from user1\n");
+	  return -EFAULT;
+	 }
+
+	 if (copy_from_user(&payload, &pcc_cfg->cfg_payload, sizeof(u64))){
+	   pr_err("failed to read payload val for pcc from user1\n");
+	   return -EFAULT;
+	 }
+
+	 if(copy_in_user((void __user*)(u64)payload32, (void __user*)payload, sizeof(struct mdp_pcc_coeff_v1_7))){
+	  pr_err("failed to copy payload for pcc from user\n");
+	  return -EFAULT;
+	 }
+}
+else
+#endif
+{
+	u32 payload32;
+	u64 payload;
+
 	memset(&pcc_cfg_payload32, 0, sizeof(pcc_cfg_payload32));
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	if (copy_from_user(&payload, &pcc_cfg->cfg_payload, sizeof(u64))){
+			pr_err("failed to copy payload for pcc from user1\n");
+			return -EFAULT;
+	}
+
+	if (copy_from_user(&pcc_cfg_payload,
+						 (void __user *)payload,
+			 sizeof(struct mdp_pcc_data_v1_7))) {
+		pr_err("failed to copy payload for pcc from user\n");
+		return -EFAULT;
+	}
+#else
 	if (copy_from_user(&pcc_cfg_payload,
 			   pcc_cfg->cfg_payload,
 			   sizeof(struct mdp_pcc_data_v1_7))) {
 		pr_err("failed to copy payload for pcc from user\n");
 		return -EFAULT;
 	}
-
+#endif
 	pcc_cfg_payload32.r.b = pcc_cfg_payload.r.b;
 	pcc_cfg_payload32.r.g = pcc_cfg_payload.r.g;
 	pcc_cfg_payload32.r.c = pcc_cfg_payload.r.c;
@@ -1004,13 +1098,26 @@ static int __to_user_pcc_coeff_v1_7(
 	pcc_cfg_payload32.b.rg = pcc_cfg_payload.b.rg;
 	pcc_cfg_payload32.b.rgb = pcc_cfg_payload.b.rgb;
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	if (copy_from_user(&payload32, &pcc_cfg32->cfg_payload, sizeof(u32))){
+		pr_err("failed to copy payload for pcc from user1\n");
+		return -EFAULT;
+	}
+
+	if (copy_to_user(compat_ptr(payload32), &pcc_cfg_payload32,
+			 sizeof(struct mdp_pcc_data_v1_7_32))) {
+		pr_err("failed to copy payload for pcc to user\n");
+		return -EFAULT;
+	}
+#else
 	if (copy_to_user(compat_ptr(pcc_cfg32->cfg_payload),
 			 &pcc_cfg_payload32,
 			 sizeof(pcc_cfg_payload32))) {
 		pr_err("failed to copy payload for pcc to user\n");
 		return -EFAULT;
 	}
-
+#endif
+}
 	return 0;
 }
 
@@ -2553,6 +2660,11 @@ static int __from_user_ad_init(
 	    copy_in_user(&ad_init->alpha_base,
 			&ad_init32->alpha_base,
 			sizeof(uint32_t)) ||
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	    copy_in_user(&ad_init->al_thresh,
+			&ad_init32->al_thresh,
+			sizeof(uint32_t)) ||			
+#endif
 	    copy_in_user(&ad_init->bl_lin_len,
 			&ad_init32->bl_lin_len,
 			sizeof(uint32_t)) ||
@@ -2878,8 +2990,12 @@ static int __pp_compat_alloc(struct msmfb_mdp_pp32 __user *pp32,
 			*pp = compat_alloc_user_space(alloc_size);
 			if (NULL == *pp)
 				return -ENOMEM;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			if (clear_user(*pp ,alloc_size))
+				return -EFAULT;
+#else
 			memset(*pp, 0, alloc_size);
-
+#endif
 			(*pp)->data.lut_cfg_data.data.pgc_lut_data.r_data =
 					(struct mdp_ar_gc_lut_data *)
 					((unsigned long) *pp +
@@ -2907,10 +3023,17 @@ static int __pp_compat_alloc(struct msmfb_mdp_pp32 __user *pp32,
 					alloc_size);
 				return -ENOMEM;
 			}
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			if (clear_user(*pp ,alloc_size))
+				return -EFAULT;
+			put_user((void *)((unsigned long)(*pp) + sizeof(struct msmfb_mdp_pp)), &(*pp)->data.lut_cfg_data.data.igc_lut_data.cfg_payload);
+#else
 			memset(*pp, 0, alloc_size);
 			(*pp)->data.lut_cfg_data.data.igc_lut_data.cfg_payload
 					= (void *)((unsigned long)(*pp) +
 					   sizeof(struct msmfb_mdp_pp));
+#endif
 			break;
 		case mdp_lut_hist:
 			alloc_size += __pp_compat_size_hist_lut();
@@ -2920,10 +3043,16 @@ static int __pp_compat_alloc(struct msmfb_mdp_pp32 __user *pp32,
 					alloc_size);
 				return -ENOMEM;
 			}
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			if (clear_user(*pp ,alloc_size))
+				return -EFAULT;
+			put_user((void *)((unsigned long)(*pp) + sizeof(struct msmfb_mdp_pp)), &(*pp)->data.lut_cfg_data.data.hist_lut_data.cfg_payload);
+#else
 			memset(*pp, 0, alloc_size);
 			(*pp)->data.lut_cfg_data.data.hist_lut_data.cfg_payload
 					= (void *)((unsigned long)(*pp) +
 					   sizeof(struct msmfb_mdp_pp));
+#endif
 			break;
 		default:
 			*pp = compat_alloc_user_space(alloc_size);
@@ -2932,7 +3061,12 @@ static int __pp_compat_alloc(struct msmfb_mdp_pp32 __user *pp32,
 					alloc_size, lut_type);
 				return -ENOMEM;
 			}
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+			if (clear_user(*pp ,alloc_size))
+				return -EFAULT;
+#else
 			memset(*pp, 0, alloc_size);
+#endif
 			break;
 		}
 		break;
@@ -2944,10 +3078,17 @@ static int __pp_compat_alloc(struct msmfb_mdp_pp32 __user *pp32,
 				alloc_size);
 			return -ENOMEM;
 		}
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		if (clear_user(*pp ,alloc_size))
+			return -EFAULT;
+		put_user((void *)((unsigned long)(*pp) + sizeof(struct msmfb_mdp_pp)), &(*pp)->data.pcc_cfg_data.cfg_payload);
+#else
 		memset(*pp, 0, alloc_size);
 		(*pp)->data.pcc_cfg_data.cfg_payload =
 				(void *)((unsigned long)(*pp) +
 				 sizeof(struct msmfb_mdp_pp));
+#endif
 		break;
 	case mdp_op_gamut_cfg:
 		alloc_size += __pp_compat_size_gamut();
@@ -2957,7 +3098,12 @@ static int __pp_compat_alloc(struct msmfb_mdp_pp32 __user *pp32,
 				alloc_size);
 			return -ENOMEM;
 		}
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		if (clear_user(*pp ,alloc_size))
+			return -EFAULT;
+#else
 		memset(*pp, 0, alloc_size);
+#endif
 		(*pp)->data.gamut_cfg_data.cfg_payload =
 				(void *)((unsigned long)(*pp) +
 				 sizeof(struct msmfb_mdp_pp));
@@ -2970,7 +3116,12 @@ static int __pp_compat_alloc(struct msmfb_mdp_pp32 __user *pp32,
 				alloc_size);
 			return -ENOMEM;
 		}
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		if (clear_user(*pp ,alloc_size))
+			return -EFAULT;
+#else
 		memset(*pp, 0, alloc_size);
+#endif
 		(*pp)->data.pa_v2_cfg_data.cfg_payload =
 				(void *)((unsigned long)(*pp) +
 				sizeof(struct msmfb_mdp_pp));
@@ -2979,7 +3130,12 @@ static int __pp_compat_alloc(struct msmfb_mdp_pp32 __user *pp32,
 		*pp = compat_alloc_user_space(alloc_size);
 		if (NULL == *pp)
 			return -ENOMEM;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		if (clear_user(*pp ,alloc_size))
+			return -EFAULT;
+#else
 		memset(*pp, 0, alloc_size);
+#endif
 		break;
 	}
 	return 0;

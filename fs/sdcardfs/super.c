@@ -78,6 +78,12 @@ static int sdcardfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 	err = vfs_statfs(&lower_path, buf);
 	sdcardfs_put_lower_path(dentry, &lower_path);
 
+	if (uid_eq(GLOBAL_ROOT_UID, current_fsuid()) ||
+			capable(CAP_SYS_RESOURCE) ||
+			in_group_p(AID_USE_ROOT_RESERVED) ||
+			in_group_p(AID_USE_SEC_RESERVED))
+		goto out;
+
 	if (sbi->options.reserved_mb) {
 		/* Invalid statfs informations. */
 		if (buf->f_bsize == 0) {
@@ -96,7 +102,7 @@ static int sdcardfs_statfs(struct dentry *dentry, struct kstatfs *buf)
 		/* Make reserved blocks invisiable to media storage */
 		buf->f_bfree = buf->f_bavail;
 	}
-
+out:
 	/* set return buf to our f/s to avoid confusing user-level utils */
 	buf->f_type = SDCARDFS_SUPER_MAGIC;
 
@@ -302,8 +308,6 @@ static int sdcardfs_show_options(struct vfsmount *mnt, struct seq_file *m,
 		seq_printf(m, ",mask=%u", vfsopts->mask);
 	if (opts->fs_user_id)
 		seq_printf(m, ",userid=%u", opts->fs_user_id);
-	if (opts->gid_derivation)
-		seq_puts(m, ",derive_gid");
 	if (opts->reserved_mb != 0)
 		seq_printf(m, ",reserved=%uMB", opts->reserved_mb);
 

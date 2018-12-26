@@ -22,7 +22,7 @@ extern void *wcnss_prealloc_get(unsigned int size);
 extern int wcnss_prealloc_put(void *ptr);
 extern int wcnss_pre_alloc_reset(void);
 
-#if !defined(CONFIG_WCNSS_MEM_PRE_ALLOC) || !defined(CONFIG_SLUB_DEBUG)
+#if !defined(CONFIG_WCNSS_MEM_PRE_ALLOC) || !defined(CONFIG_SLUB_DEBUG_ON)
 static inline void wcnss_prealloc_check_memory_leak(void) {}
 #else
 void wcnss_prealloc_check_memory_leak(void);

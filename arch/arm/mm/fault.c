@@ -29,6 +29,11 @@
 #include "fault.h"
 
 #include <trace/events/exception.h>
+#include <linux/sec_debug.h>
+
+#ifdef CONFIG_USER_RESET_DEBUG
+#include <linux/user_reset/sec_debug_user_reset.h>
+#endif
 
 #ifdef CONFIG_MMU
 
@@ -66,9 +71,18 @@ void show_pte(struct mm_struct *mm, unsigned long addr)
 		mm = &init_mm;
 
 	printk(KERN_ALERT "pgd = %p\n", mm->pgd);
+#ifdef CONFIG_USER_RESET_DEBUG
+	sec_debug_store_pte((unsigned long)mm->pgd, 0);
+#endif
+
 	pgd = pgd_offset(mm, addr);
 	printk(KERN_ALERT "[%08lx] *pgd=%08llx",
 			addr, (long long)pgd_val(*pgd));
+
+#ifdef CONFIG_USER_RESET_DEBUG
+	sec_debug_store_pte((unsigned long)addr, 1);
+	sec_debug_store_pte((unsigned long)pgd_val(*pgd), 2);
+#endif
 
 	do {
 		pud_t *pud;
@@ -87,6 +101,9 @@ void show_pte(struct mm_struct *mm, unsigned long addr)
 		if (PTRS_PER_PUD != 1)
 			printk(", *pud=%08llx", (long long)pud_val(*pud));
 
+#ifdef CONFIG_USER_RESET_DEBUG
+		sec_debug_store_pte((unsigned long)pud_val(*pud), 3);
+#endif
 		if (pud_none(*pud))
 			break;
 
@@ -99,6 +116,9 @@ void show_pte(struct mm_struct *mm, unsigned long addr)
 		if (PTRS_PER_PMD != 1)
 			printk(", *pmd=%08llx", (long long)pmd_val(*pmd));
 
+#ifdef CONFIG_USER_RESET_DEBUG
+		sec_debug_store_pte((unsigned long)pmd_val(*pmd), 4);
+#endif
 		if (pmd_none(*pmd))
 			break;
 
@@ -116,6 +136,9 @@ void show_pte(struct mm_struct *mm, unsigned long addr)
 #ifndef CONFIG_ARM_LPAE
 		printk(", *ppte=%08llx",
 		       (long long)pte_val(pte[PTE_HWTABLE_PTRS]));
+#endif
+#ifdef CONFIG_USER_RESET_DEBUG
+		sec_debug_store_pte((unsigned long)pte_val(*pte), 5);
 #endif
 		pte_unmap(pte);
 	} while(0);

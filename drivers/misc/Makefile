@@ -71,5 +71,15 @@ obj-$(CONFIG_QPNP_MISC) 	+= qpnp-misc.o
 obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
 obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
 obj-$(CONFIG_APDS9930)		+= apds993x.o
-obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
-obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
+# Samsung Jack
+obj-$(CONFIG_SAMSUNG_JACK)	+= sec_jack.o
+obj-$(CONFIG_SEC_MPP_SHARE)	+= sec_mux_sel.o
+# Secure OS Mobicore Interface
+obj-$(CONFIG_QSEECOM)	+= tzic64.o
+
+ifeq ($(TIMA_ENABLED),1)
+obj-$(CONFIG_TIMA_LOG)		+= tima_debug_log.o
+endif
+
+# for DMVerity
+obj-$(CONFIG_DM_VERITY)		+= dmverity_query.o

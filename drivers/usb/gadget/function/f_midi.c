@@ -45,7 +45,7 @@ static const char f_midi_longname[] = "MIDI Gadget";
  * stored in 4-bit fields. And as the interface currently only holds one
  * single endpoint, this is the maximum number of ports we can allow.
  */
-#define MAX_PORTS 16
+#define MAX_PORTS 1
 
 /*
  * This is a gadget, and the IN/OUT naming is from the host's perspective.
@@ -92,7 +92,7 @@ struct f_midi {
 	unsigned int buflen, qlen;
 };
 
-static struct f_midi *the_midi;
+static struct f_midi *_midi;
 
 static inline struct f_midi *func_to_midi(struct usb_function *f)
 {
@@ -213,12 +213,6 @@ static inline struct usb_request *midi_alloc_ep_req(struct usb_ep *ep,
 						    unsigned length)
 {
 	return alloc_ep_req(ep, length, length);
-}
-
-static void midi_free_ep_req(struct usb_ep *ep, struct usb_request *req)
-{
-	kfree(req->buf);
-	usb_ep_free_request(ep, req);
 }
 
 static const uint8_t f_midi_cin_length[] = {
@@ -415,16 +409,10 @@ static void f_midi_unbind(struct usb_configuration *c, struct usb_function *f)
 	f_midi_disable(f);
 
 	card = midi->card;
-	midi->card = NULL;
 	if (card)
 		snd_card_free_when_closed(card);
 
-	kfree(midi->id);
-	midi->id = NULL;
-
 	usb_free_all_descriptors(f);
-	kfree(midi);
-	the_midi = NULL;
 }
 
 static int f_midi_snd_free(struct snd_device *device)
@@ -598,10 +586,6 @@ static int f_midi_in_open(struct snd_rawmidi_substream *substream)
 {
 	struct f_midi *midi = substream->rmidi->private_data;
 
-	/* check if midi got disabled or re-enabled quickly */
-	if (midi != the_midi)
-		return -ENODEV;
-
 	if (!midi->in_port[substream->number])
 		return -EINVAL;
 
@@ -623,10 +607,6 @@ static void f_midi_in_trigger(struct snd_rawmidi_substream *substream, int up)
 {
 	struct f_midi *midi = substream->rmidi->private_data;
 
-	/* check if midi got disabled or re-enabled quickly */
-	if (midi != the_midi)
-		return;
-
 	if (!midi->in_port[substream->number])
 		return;
 
@@ -639,10 +619,6 @@ static void f_midi_in_trigger(struct snd_rawmidi_substream *substream, int up)
 static int f_midi_out_open(struct snd_rawmidi_substream *substream)
 {
 	struct f_midi *midi = substream->rmidi->private_data;
-
-	/* check if midi got disabled or re-enabled quickly */
-	if (midi != the_midi)
-		return -ENODEV;
 
 	if (substream->number >= MAX_PORTS)
 		return -EINVAL;
@@ -663,10 +639,6 @@ static int f_midi_out_close(struct snd_rawmidi_substream *substream)
 static void f_midi_out_trigger(struct snd_rawmidi_substream *substream, int up)
 {
 	struct f_midi *midi = substream->rmidi->private_data;
-
-	/* check if midi got disabled or re-enabled quickly */
-	if (midi != the_midi)
-		return;
 
 	VDBG(midi, "%s()\n", __func__);
 
@@ -945,8 +917,8 @@ f_midi_bind(struct usb_configuration *c, struct usb_function *f)
 		goto fail_f_midi;
 
 	if (gadget_is_dualspeed(c->cdev->gadget)) {
-		bulk_in_desc.wMaxPacketSize = cpu_to_le16(512);
-		bulk_out_desc.wMaxPacketSize = cpu_to_le16(512);
+		bulk_in_desc.wMaxPacketSize = cpu_to_le16(midi->buflen);
+		bulk_out_desc.wMaxPacketSize = cpu_to_le16(midi->buflen);
 		f->hs_descriptors = usb_copy_descriptors(midi_function);
 		if (!f->hs_descriptors)
 			goto fail_f_midi;
@@ -1012,24 +984,12 @@ int /* __init */ f_midi_bind_config(struct usb_configuration *c,
 	if (in_ports > MAX_PORTS || out_ports > MAX_PORTS)
 		return -EINVAL;
 
-	/* allocate and initialize one new instance */
-	midi = kzalloc(sizeof *midi, GFP_KERNEL);
-	if (!midi) {
-		status = -ENOMEM;
-		goto fail;
-	}
+	midi = _midi;
 
 	for (i = 0; i < in_ports; i++) {
-		struct gmidi_in_port *port = kzalloc(sizeof(*port), GFP_KERNEL);
-		if (!port) {
-			status = -ENOMEM;
-			goto setup_fail;
-		}
-
-		port->midi = midi;
-		port->active = 0;
-		port->cable = i;
-		midi->in_port[i] = port;
+		midi->in_port[i]->active = 0;
+		midi->in_port[i]->cable = i;
+		midi->in_port[i]->state = STATE_UNKNOWN;
 	}
 
 	midi->gadget = c->cdev->gadget;
@@ -1057,7 +1017,6 @@ int /* __init */ f_midi_bind_config(struct usb_configuration *c,
 	if (status)
 		goto setup_fail;
 
-	the_midi = midi;
 
 	if (config) {
 		config->card = midi->rmidi->card->number;
@@ -1067,10 +1026,45 @@ int /* __init */ f_midi_bind_config(struct usb_configuration *c,
 	return 0;
 
 setup_fail:
+	return status;
+}
+
+static int f_midi_setup(void)
+{
+	struct f_midi *midi;
+	int i, status;
+
+	/* allocate and initialize one new instance */
+	midi = kzalloc(sizeof *midi, GFP_KERNEL);
+	if (!midi) {
+		return -ENOMEM;
+	}
+	_midi = midi;
+
+	for (i = 0; i < MAX_PORTS; i++) {
+		struct gmidi_in_port *port = kzalloc(sizeof(*port), GFP_KERNEL);
+		if (!port) {
+			status = -ENOMEM;
+			goto setup_fail;
+		}
+		port->midi = midi;
+		midi->in_port[i] = port;
+	}
+	return 0;
+
+setup_fail:
 	for (--i; i >= 0; i--)
 		kfree(midi->in_port[i]);
+
 	kfree(midi);
-fail:
 	return status;
+}
+
+static void f_midi_cleanup(void)
+{
+	int i;
+	for (i = 0; i < MAX_PORTS; i++)
+		kfree(_midi->in_port[i]);
+	kfree(_midi);
 }
 

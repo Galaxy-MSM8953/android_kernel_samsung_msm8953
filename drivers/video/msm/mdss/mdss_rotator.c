@@ -1058,6 +1058,11 @@ static int mdss_rotator_calc_perf(struct mdss_rot_perf *perf)
 		(0xffffffff/perf->clk_rate < config->frame_rate))
 		return -EINVAL;
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	if(config->input.width * config->input.height <= ((1080+100)*(1920+100)))
+		config->frame_rate = 60;
+#endif
+
 	perf->clk_rate *= config->frame_rate;
 	/* rotator processes 4 pixels per clock */
 	perf->clk_rate /= 4;

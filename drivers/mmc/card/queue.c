@@ -115,8 +115,7 @@ static int mmc_cmdq_thread(void *d)
 	struct mmc_host *host = card->host;
 
 	current->flags |= PF_MEMALLOC;
-	if (card->host->wakeup_on_idle)
-		set_wake_up_idle(true);
+	set_wake_up_idle(true);
 
 	while (1) {
 		int ret = 0;
@@ -141,11 +140,9 @@ static int mmc_queue_thread(void *d)
 {
 	struct mmc_queue *mq = d;
 	struct request_queue *q = mq->queue;
-	struct mmc_card *card = mq->card;
 
 	current->flags |= PF_MEMALLOC;
-	if (card->host->wakeup_on_idle)
-		set_wake_up_idle(true);
+	set_wake_up_idle(true);
 
 	down(&mq->thread_sem);
 	do {
@@ -155,7 +152,12 @@ static int mmc_queue_thread(void *d)
 
 		spin_lock_irq(q->queue_lock);
 		set_current_state(TASK_INTERRUPTIBLE);
-		req = blk_fetch_request(q);
+		if (mq->mqrq_prev->req &&
+				(mq->card && (mq->card->type == MMC_TYPE_SD) &&
+				mq->card->host->pm_progress))
+			req = NULL;
+		else
+			req = blk_fetch_request(q);
 		mq->mqrq_cur->req = req;
 		spin_unlock_irq(q->queue_lock);
 
@@ -660,7 +662,7 @@ int mmc_cmdq_init(struct mmc_queue *mq, struct mmc_card *card)
 	init_completion(&mq->cmdq_pending_req_done);
 
 	blk_queue_rq_timed_out(mq->queue, mmc_cmdq_rq_timed_out);
-	blk_queue_rq_timeout(mq->queue, 120 * HZ);
+	blk_queue_rq_timeout(mq->queue, 30 * HZ);
 	card->cmdq_init = true;
 
 	goto out;
@@ -715,13 +717,15 @@ int mmc_queue_suspend(struct mmc_queue *mq, int wait)
 		if (wait) {
 
 			/*
-			 * After blk_cleanup_queue is called, wait for all
+			 * After blk_stop_queue is called, wait for all
 			 * active_reqs to complete.
 			 * Then wait for cmdq thread to exit before calling
 			 * cmdq shutdown to avoid race between issuing
 			 * requests and shutdown of cmdq.
 			 */
-			blk_cleanup_queue(q);
+			spin_lock_irqsave(q->queue_lock, flags);
+			blk_stop_queue(q);
+			spin_unlock_irqrestore(q->queue_lock, flags);
 
 			if (host->cmdq_ctx.active_reqs)
 				wait_for_completion(
@@ -746,15 +750,9 @@ int mmc_queue_suspend(struct mmc_queue *mq, int wait)
 	}
 
 	if (!(test_and_set_bit(MMC_QUEUE_SUSPENDED, &mq->flags))) {
-		if (!wait) {
-			/* suspend/stop the queue in case of suspend */
-			spin_lock_irqsave(q->queue_lock, flags);
-			blk_stop_queue(q);
-			spin_unlock_irqrestore(q->queue_lock, flags);
-		} else {
-			/* shutdown the queue in case of shutdown/reboot */
-			blk_cleanup_queue(q);
-		}
+		spin_lock_irqsave(q->queue_lock, flags);
+		blk_stop_queue(q);
+		spin_unlock_irqrestore(q->queue_lock, flags);
 
 		rc = down_trylock(&mq->thread_sem);
 		if (rc && !wait) {
@@ -767,9 +765,29 @@ int mmc_queue_suspend(struct mmc_queue *mq, int wait)
 			blk_start_queue(q);
 			spin_unlock_irqrestore(q->queue_lock, flags);
 			rc = -EBUSY;
-		} else if (rc && wait) {
-			down(&mq->thread_sem);
-			rc = 0;
+		} else if (wait) {
+			struct request *req;
+			printk("%s: mq->flags: %ld, q->queue_flags: 0x%lx, \
+					q->in_flight (%d, %d) \n",
+					mmc_hostname(mq->card->host), mq->flags,
+					q->queue_flags, q->in_flight[0], q->in_flight[1]);
+			mutex_lock(&q->sysfs_lock);
+			queue_flag_set_unlocked(QUEUE_FLAG_DYING, q);
+
+			spin_lock_irqsave(q->queue_lock, flags);
+			queue_flag_set(QUEUE_FLAG_DYING, q);
+
+			while ((req = blk_fetch_request(q)) != NULL) {
+				req->cmd_flags |= REQ_QUIET;
+				__blk_end_request_all(req, -EIO);
+			}
+
+			spin_unlock_irqrestore(q->queue_lock, flags);
+			mutex_unlock(&q->sysfs_lock);
+			if (rc) {
+				down(&mq->thread_sem);
+				rc = 0;
+			}
 		}
 	}
 out:

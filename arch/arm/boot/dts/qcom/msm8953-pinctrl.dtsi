@@ -554,7 +554,7 @@
 		sdc1_cmd_on: sdc1_cmd_on {
 			config {
 				pins = "sdc1_cmd";
-				bias-pull-up;		/* pull up */
+				bias-disable;           /* NO pull */
 				drive-strength = <10>;	/* 10 MA */
 			};
 		};
@@ -563,7 +563,7 @@
 			config {
 				pins = "sdc1_cmd";
 				num-grp-pins = <1>;
-				bias-pull-up;		/* pull up */
+				bias-disable;           /* NO pull */
 				drive-strength = <2>;	/* 2 MA */
 			};
 		};
@@ -655,7 +655,7 @@
 			config {
 				pins = "gpio133";
 				drive-strength = <2>;
-				bias-pull-up;
+				bias-disable;
 			};
 		};
 

@@ -5876,6 +5876,7 @@ static int tsens_thermal_zone_register(struct tsens_tm_device *tmdev)
 	for (i = 0; i < tmdev->tsens_num_sensor; i++) {
 		char name[18];
 		if ((!strcmp(id->compatible, "qcom,mdm9640-tsens")) ||
+			(!strcmp(id->compatible, "qcom,msm8953-tsens")) ||
 			(!strcmp(id->compatible, "qcom,mdm9640v2-tsens")))
 			snprintf(name, sizeof(name), "tsens_tz_sensor%d",
 					tmdev->sensor[i].sensor_hw_num);

@@ -34,6 +34,15 @@
 #include <linux/usb/otg.h>
 
 #include <linux/phy/phy.h>
+#ifdef CONFIG_USB_CHARGING_EVENT
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+#include "../../battery_v2/include/sec_charging_common.h"
+#elif defined(CONFIG_BATTERY_SAMSUNG_V2_LEGACY)
+#include "../../battery_v2_legacy/include/sec_charging_common.h"
+#else
+#include <linux/battery/sec_charging_common.h>
+#endif
+#endif
 
 #define DWC3_MSG_MAX	500
 
@@ -990,6 +999,10 @@ struct dwc3 {
 	wait_queue_head_t	wait_linkstate;
 	void			*dwc_ipc_log_ctxt;
 	int			last_fifo_depth;
+#if IS_ENABLED(CONFIG_USB_CHARGING_EVENT)
+	struct work_struct      set_vbus_current_work;
+	int			vbus_current; /* 0 : 100mA, 1 : 500mA, 2: 900mA */
+#endif
 };
 
 /* -------------------------------------------------------------------------- */

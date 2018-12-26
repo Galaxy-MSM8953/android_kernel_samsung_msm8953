@@ -721,6 +721,7 @@ core_initcall(map_entry_trampoline);
  */
 void __init paging_init(void)
 {
+	set_memsize_kernel_type(MEMSIZE_KERNEL_PAGING);
 	map_mem();
 	dma_contiguous_remap();
 	remap_pages();
@@ -737,6 +738,7 @@ void __init paging_init(void)
 	set_kernel_text_ro();
 	local_flush_tlb_all();
 	cpu_set_default_tcr_t0sz();
+	set_memsize_kernel_type(MEMSIZE_KERNEL_OTHERS);
 }
 
 /*

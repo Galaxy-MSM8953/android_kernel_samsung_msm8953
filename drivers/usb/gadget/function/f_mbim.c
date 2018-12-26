@@ -741,8 +741,6 @@ static void mbim_notify_complete(struct usb_ep *ep, struct usb_request *req)
 	struct f_mbim			*mbim = req->context;
 	struct usb_cdc_notification	*event = req->buf;
 
-	pr_debug("dev:%pK\n", mbim);
-
 	spin_lock(&mbim->lock);
 	switch (req->status) {
 	case 0:
@@ -770,7 +768,7 @@ static void mbim_notify_complete(struct usb_ep *ep, struct usb_request *req)
 
 	spin_unlock(&mbim->lock);
 
-	pr_debug("dev:%pK Exit\n", mbim);
+	pr_debug("%s: Exit\n", __func__);
 }
 
 static void mbim_ep0out_complete(struct usb_ep *ep, struct usb_request *req)
@@ -780,8 +778,6 @@ static void mbim_ep0out_complete(struct usb_ep *ep, struct usb_request *req)
 	struct usb_function	*f = req->context;
 	struct f_mbim		*mbim = func_to_mbim(f);
 	struct mbim_ntb_input_size *ntb = NULL;
-
-	pr_debug("dev:%pK\n", mbim);
 
 	req->context = NULL;
 	if (req->status || req->actual != req->length) {
@@ -819,7 +815,7 @@ static void mbim_ep0out_complete(struct usb_ep *ep, struct usb_request *req)
 invalid:
 	usb_ep_set_halt(ep);
 
-	pr_err("dev:%pK Failed\n", mbim);
+	pr_err("%s: Failed\n", __func__);
 
 	return;
 }
@@ -1909,6 +1905,7 @@ mbim_write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 	ret = usb_func_ep_queue(&dev->function, dev->not_port.notify,
 			   req, GFP_ATOMIC);
 	if (ret == -ENOTSUPP || (ret < 0 && ret != -EAGAIN)) {
+		pr_err("drop ctrl pkt of len %d error %d\n", cpkt->len, ret);
 		spin_lock_irqsave(&dev->lock, flags);
 		/* check if device disconnected while we dropped lock */
 		if (atomic_read(&dev->online)) {
@@ -1918,7 +1915,6 @@ mbim_write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 		}
 		dev->cpkt_drop_cnt++;
 		spin_unlock_irqrestore(&dev->lock, flags);
-		pr_err("drop ctrl pkt of len %d error %d\n", cpkt->len, ret);
 	} else {
 		ret = 0;
 	}

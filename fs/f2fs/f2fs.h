@@ -38,7 +38,7 @@
 #define f2fs_bug_on(sbi, condition)					\
 	do {								\
 		if (unlikely(condition)) {				\
-			WARN_ON(1);					\
+			BUG_ON(1);					\
 			set_sbi_flag(sbi, SBI_NEED_FSCK);		\
 		}							\
 	} while (0)
@@ -2212,6 +2212,7 @@ static inline void __mark_inode_dirty_flag(struct inode *inode,
 	case FI_INLINE_XATTR:
 	case FI_INLINE_DATA:
 	case FI_INLINE_DENTRY:
+	case FI_NEW_INODE:
 		if (set)
 			return;
 	case FI_DATA_EXIST:

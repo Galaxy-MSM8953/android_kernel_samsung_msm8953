@@ -210,7 +210,7 @@ vreg_get_fail:
 	return rc;
 } /* msm_dss_config_vreg */
 EXPORT_SYMBOL(msm_dss_config_vreg);
-
+#if 0/*temp*/
 int msm_dss_config_vreg_opt_mode(struct dss_vreg *in_vreg, int num_vreg,
 				 enum dss_vreg_mode mode)
 {
@@ -256,7 +256,7 @@ error:
 	return rc;
 }
 EXPORT_SYMBOL(msm_dss_config_vreg_opt_mode);
-
+#endif
 int msm_dss_enable_vreg(struct dss_vreg *in_vreg, int num_vreg, int enable)
 {
 	int i = 0, rc = 0;

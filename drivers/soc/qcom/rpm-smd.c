@@ -1281,7 +1281,9 @@ static int msm_rpm_send_data(struct msm_rpm_request *cdata,
 		return ret;
 	}
 
-	msm_rpm_add_wait_list(cdata->msg_hdr.msg_id, noack);
+	ret = msm_rpm_add_wait_list(cdata->msg_hdr.msg_id, noack);
+	if (ret)
+		return ret;
 
 	ret = msm_rpm_send_buffer(&cdata->buf[0], msg_size, noirq);
 

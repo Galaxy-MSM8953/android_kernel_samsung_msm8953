@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,6 +27,9 @@
 #include "mdss_mdp.h"
 #include "mdss_mdp_trace.h"
 #include "mdss_debug.h"
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+#include "samsung/ss_dsi_panel_common.h" /* UTIL HEADER */
+#endif
 
 #define MDSS_MDP_QSEED3_VER_DOWNSCALE_LIM 2
 #define NUM_MIXERCFG_REGS 3
@@ -2343,6 +2346,11 @@ static void mdss_mdp_ctl_perf_update(struct mdss_mdp_ctl *ctl,
 	 */
 	if (update_clk) {
 		ATRACE_INT("mdp_clk", clk_rate);
+#if defined(CONFIG_SEC_MSM8917_PROJECT)
+/*Case:03521199: New CR 2260689*/
+		if (clk_rate == 80000000)
+			clk_rate = 100000000;
+#endif 
 		mdss_mdp_set_clk_rate(clk_rate);
 		pr_debug("update clk rate = %d HZ\n", clk_rate);
 	}
@@ -3512,51 +3520,7 @@ int mdss_mdp_ctl_setup(struct mdss_mdp_ctl *ctl)
 	ctl->mixer_left->valid_roi = true;
 	ctl->mixer_left->roi_changed = true;
 
-	if (ctl->mfd->split_mode == MDP_DUAL_LM_DUAL_DISPLAY) {
-		pr_debug("dual display detected\n");
-	} else {
-		if (split_fb)
-			width = ctl->mfd->split_fb_right;
-
-		if (width < ctl->width) {
-			if (ctl->mixer_right == NULL) {
-				ctl->mixer_right = mdss_mdp_mixer_alloc(ctl,
-					MDSS_MDP_MIXER_TYPE_INTF, true, 0);
-				if (!ctl->mixer_right) {
-					pr_err("unable to allocate right mixer\n");
-					if (ctl->mixer_left)
-						mdss_mdp_mixer_free(
-							ctl->mixer_left);
-					return -ENOMEM;
-				}
-			}
-			ctl->mixer_right->is_right_mixer = true;
-			ctl->mixer_right->width = width;
-			ctl->mixer_right->height = height;
-			ctl->mixer_right->roi = (struct mdss_rect)
-						{0, 0, width, height};
-			ctl->mixer_right->valid_roi = true;
-			ctl->mixer_right->roi_changed = true;
-		} else if (ctl->mixer_right) {
-			ctl->mixer_right->valid_roi = false;
-			ctl->mixer_right->roi_changed = false;
-			mdss_mdp_mixer_free(ctl->mixer_right);
-			ctl->mixer_right = NULL;
-		}
-
-		if (ctl->mixer_right) {
-			if (!is_dsc_compression(pinfo) ||
-				(pinfo->dsc_enc_total == 1))
-				ctl->opmode |= MDSS_MDP_CTL_OP_PACK_3D_ENABLE |
-				       MDSS_MDP_CTL_OP_PACK_3D_H_ROW_INT;
-		} else {
-			ctl->opmode &= ~(MDSS_MDP_CTL_OP_PACK_3D_ENABLE |
-				  MDSS_MDP_CTL_OP_PACK_3D_H_ROW_INT);
-		}
-	}
-
-	rc = mdss_mdp_pp_default_overlay_config(ctl->mfd, ctl->panel_data,
-						true);
+	rc = mdss_mdp_pp_default_overlay_config(ctl->mfd, ctl->panel_data);
 	/*
 	 * Ignore failure of PP config, ctl set-up can succeed.
 	 */
@@ -3564,6 +3528,49 @@ int mdss_mdp_ctl_setup(struct mdss_mdp_ctl *ctl)
 		pr_err("failed to set the pp config rc %dfb %d\n", rc,
 			ctl->mfd->index);
 		rc = 0;
+	}
+
+	if (ctl->mfd->split_mode == MDP_DUAL_LM_DUAL_DISPLAY) {
+		pr_debug("dual display detected\n");
+		return 0;
+	}
+
+	if (split_fb)
+		width = ctl->mfd->split_fb_right;
+
+	if (width < ctl->width) {
+		if (ctl->mixer_right == NULL) {
+			ctl->mixer_right = mdss_mdp_mixer_alloc(ctl,
+					MDSS_MDP_MIXER_TYPE_INTF, true, 0);
+			if (!ctl->mixer_right) {
+				pr_err("unable to allocate right mixer\n");
+				if (ctl->mixer_left)
+					mdss_mdp_mixer_free(ctl->mixer_left);
+				return -ENOMEM;
+			}
+		}
+		ctl->mixer_right->is_right_mixer = true;
+		ctl->mixer_right->width = width;
+		ctl->mixer_right->height = height;
+		ctl->mixer_right->roi = (struct mdss_rect)
+						{0, 0, width, height};
+		ctl->mixer_right->valid_roi = true;
+		ctl->mixer_right->roi_changed = true;
+	} else if (ctl->mixer_right) {
+		ctl->mixer_right->valid_roi = false;
+		ctl->mixer_right->roi_changed = false;
+		mdss_mdp_mixer_free(ctl->mixer_right);
+		ctl->mixer_right = NULL;
+	}
+
+	if (ctl->mixer_right) {
+		if (!is_dsc_compression(pinfo) ||
+		    (pinfo->dsc_enc_total == 1))
+			ctl->opmode |= MDSS_MDP_CTL_OP_PACK_3D_ENABLE |
+				       MDSS_MDP_CTL_OP_PACK_3D_H_ROW_INT;
+	} else {
+		ctl->opmode &= ~(MDSS_MDP_CTL_OP_PACK_3D_ENABLE |
+				  MDSS_MDP_CTL_OP_PACK_3D_H_ROW_INT);
 	}
 	return 0;
 }
@@ -3923,9 +3930,6 @@ int mdss_mdp_ctl_destroy(struct mdss_mdp_ctl *ctl)
 	rc = mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_CLOSE, NULL,
 				     CTL_INTF_EVENT_FLAG_DEFAULT);
 	WARN(rc, "unable to close panel for intf=%d\n", ctl->intf_num);
-
-	(void) mdss_mdp_pp_default_overlay_config(ctl->mfd, ctl->panel_data,
-							false);
 
 	sctl = mdss_mdp_get_split_ctl(ctl);
 	if (sctl) {
@@ -5413,11 +5417,20 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 	bool is_bw_released, split_lm_valid;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
 	u32 ctl_flush_bits = 0, sctl_flush_bits = 0;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	struct samsung_display_driver_data *vdd = NULL;
+	struct mdss_panel_info *pinfo = NULL;
+#endif
 
 	if (!ctl) {
 		pr_err("display function not set\n");
 		return -ENODEV;
 	}
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	vdd = samsung_get_vdd();
+	pinfo = &ctl->panel_data->panel_info;
+#endif
 
 	mutex_lock(&ctl->lock);
 	pr_debug("commit ctl=%d play_cnt=%d\n", ctl->num, ctl->play_cnt);
@@ -5517,9 +5530,7 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 		} else {
 			sctl_flush_bits = sctl->flush_bits;
 		}
-		sctl->commit_in_progress = true;
 	}
-	ctl->commit_in_progress = true;
 	ctl_flush_bits = ctl->flush_bits;
 
 	ATRACE_END("postproc_programming");
@@ -5533,6 +5544,9 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 			MDP_COMMIT_STAGE_SETUP_DONE,
 			commit_cb->data);
 	ret = mdss_mdp_ctl_notify(ctl, MDP_NOTIFY_FRAME_READY);
+	ctl->commit_in_progress = true;
+	if (sctl)
+		sctl->commit_in_progress = true;
 
 	/*
 	 * When wait for fence timed out, driver ignores the fences
@@ -5658,6 +5672,15 @@ int mdss_mdp_display_commit(struct mdss_mdp_ctl *ctl, void *arg,
 		mdss_mdp_bwcpanic_ctrl(mdata, true);
 
 	ATRACE_BEGIN("flush_kickoff");
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	if ((vdd->init_panel_before_commit) && (pinfo->type == MIPI_VIDEO_PANEL)) {
+		vdd->init_panel_before_commit = false;
+		mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_LINK_READY, NULL,CTL_INTF_EVENT_FLAG_DEFAULT);
+		mdss_mdp_ctl_intf_event(ctl, MDSS_EVENT_UNBLANK, NULL,CTL_INTF_EVENT_FLAG_DEFAULT);
+	}
+#endif
+
 	mdss_mdp_ctl_write(ctl, MDSS_MDP_REG_CTL_FLUSH, ctl_flush_bits);
 	if (sctl) {
 		if (sctl_flush_bits) {

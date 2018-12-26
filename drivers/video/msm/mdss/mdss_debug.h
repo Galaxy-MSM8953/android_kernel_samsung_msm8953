@@ -104,12 +104,24 @@ struct mdss_debug_base {
 	u32 *reg_dump; /* address for the mem dump if no ranges used */
 };
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+struct debug_log {
+	struct dentry *xlog;
+	u32 xlog_enable;
+	u32 panic_on_err;
+	u32 enable_reg_dump;
+};
+#endif
+
 struct mdss_debug_data {
 	struct dentry *root;
 	struct dentry *perf;
 	struct dentry *bordercolor;
 	struct dentry *postproc;
 	struct list_head base_list;
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	struct debug_log logd;
+#endif
 };
 
 struct dump_offset {
@@ -144,7 +156,7 @@ int mdss_debug_register_base(const char *name, void __iomem *base,
 	size_t max_offset, struct mdss_debug_base **dbg_blk);
 void mdss_debug_register_dump_range(struct platform_device *pdev,
 	struct mdss_debug_base *blk_base, const char *ranges_prop,
-	const char *name_prop, const char *xin_prop);
+	const char *name_prop);
 int panel_debug_register_base(const char *name, void __iomem *base,
 				    size_t max_offset);
 int mdss_misr_set(struct mdss_data_type *mdata,

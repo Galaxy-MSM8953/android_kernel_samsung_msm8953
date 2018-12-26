@@ -550,6 +550,117 @@ config LEDS_AW2013
 	  This option enables support for the AW2013 RGB LED connected
 	  through I2C. Say Y to enable support for the AW2013 LED.
 
+config FLASHLIGHT
+	bool "Flashlight Support"
+	help
+	  This option enables the led sysfs class in /sys/class/flashlight.
+
+config SM_FLASH_LED
+	tristate "Siliconmitus flash LED driver support"
+	depends on FLASHLIGHT
+	help
+	  Say Y here to enable Siliconmitus's flash LED driver HAL architecture
+
+config FLED_SM5703
+	tristate "Siliconmitus SM5703 flash LED driver"
+	help
+	  A driver for Siliconmitus SM5703 flash LED
+
+config LEDS_SM5705
+	tristate "Siliconmitus SM5703 flash LED driver"
+	help
+	  A driver for Siliconmitus SM5705 flash LED
+
+config LEDS_SM5705_RGB
+	tristate "LED driver for SM5705 LED"
+	  help
+	  This option enables support for RGB LED driver
+	  accessed via the I2C bus.
+	  SM5705 is a fully programmable, constant current
+	  three channel LED driver with flexible control interface.
+
+config LEDS_SM5708
+	tristate "LED support for SM5708 Flashlight"
+	depends on I2C && MFD_SM5708
+	help
+	  This option enables support for on-chip LED driver on
+	  Silicon-mitus SM5708 includes Torch, Flash.
+
+config LEDS_SM5708_RGB
+	tristate "LED driver for SM5708 LED"
+	  help
+	  This option enables support for RGB LED driver
+	  accessed via the I2C bus.
+	  SM5708 is a fully programmable, constant current
+	  three channel LED driver with flexible control interface.
+
+config DUAL_LEDS_FLASH
+	tristate "Dual leds flash driver for main camera"
+	help
+	  This is obsolute. Alternatives are:
+	  FRONT_LED_FLASH, FRONT_DUAL_LED_FLASH & REAR_DUAL_LED_FLASH
+	  A driver for dual LEDs flash
+	  This option enables support for the dual LEDs on the SM5705.
+
+config LEDS_SEPARATE_PREFLASH
+	tristate "Seperate preflash current for main camera"
+	help
+	  Option for seperate preflash current on SM5705.
+
+config REAR_DUAL_LED_FLASH
+	tristate "support for dual rear led flash"
+	help
+	  Enables sysfs node for dual rear led flash support.
+
+config FRONT_DUAL_LED_FLASH
+	tristate "support for dual front led flash"
+	help
+	  Enables sysfs node for dual front led flash support.
+
+config FRONT_LED_FLASH
+	tristate "support for front led flash"
+	help
+	  Enables sysfs node for front led flash support.
+
+config LEDS_S2MU005
+	tristate "S2MU005 flash LED driver"
+	help
+	  A driver for S2MU005 flash LED
+	  This option enables support for the LEDs on the S2MU005.
+
+config LEDS_KTD2026
+	tristate "LED driver for KTD2026 LED"
+	depends on I2C
+	  help
+	  This option enables support for RGB LED driver
+	  accessed via the I2C bus.
+	  KTD2026 is a fully programmable, constant current
+	  three channel LED driver with flexible control interface.
+	  
+config LEDS_KTD2692
+	tristate "LED driver for KTD2692 LED"
+	  help
+	  A driver for KTD2692 flash LED
+	  This option enables support for the LEDs on the KTD2692.
+
+config FRONT_FLASH
+	bool "Rear LED and Front LED both USING"
+	---help---
+		ONLY for Front FLASH Model using.
+		Front LED for LM3632 or KTD2692 Rear LED SM5703.
+
+config LEDS_KTD2692_FOR_FRONT
+	bool "KTD2692 LED FOR FRONT LED FLASH"
+	help
+	  ONLY for Model using KTD2692 LED for Front LED Flash.
+
+config ACTIVE_FLASH
+	tristate "set Active Flash attribute"
+	help
+	  A driver for Active Flash
+	  This option enables support for the Active Flash.	  
+
+
 comment "LED Triggers"
 source "drivers/leds/trigger/Kconfig"
 

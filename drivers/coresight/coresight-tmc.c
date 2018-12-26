@@ -1834,6 +1834,8 @@ static ssize_t tmc_etr_byte_cntr_read(struct file *file, char __user *data,
 
 	dev_dbg(drvdata->dev, "%s: %zu bytes copied, %d bytes left\n",
 		__func__, len, (int) (drvdata->size - *ppos));
+
+	mutex_lock(&drvdata->usb_lock);
 	return len;
 
 read_err0:

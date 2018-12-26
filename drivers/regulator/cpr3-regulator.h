@@ -867,7 +867,9 @@ int cpr3_apm_init(struct cpr3_controller *ctrl);
 int cpr3_mem_acc_init(struct cpr3_regulator *vreg);
 int cpr3_parse_fuse_combo_map(struct cpr3_regulator *vreg, u64 *fuse_val,
 			int fuse_count);
-
+#ifdef CONFIG_SEC_AP_HEALTH
+int cpr3_save_fused_open_loop_voltage(struct cpr3_regulator *vreg, int *fuse_volt);
+#endif /* CONFIG_SEC_AP_HEALTH */
 #else
 
 static inline int cpr3_regulator_register(struct platform_device *pdev,
@@ -1044,6 +1046,12 @@ static int cpr3_parse_fuse_combo_map(struct cpr3_regulator *vreg, u64 *fuse_val,
 {
 	return -EPERM;
 }
+#ifdef CONFIG_SEC_AP_HEALTH
+static int cpr3_save_fused_open_loop_voltage(struct cpr3_regulator *vreg, int *fuse_volt)
+{
+	return 0;
+}
+#endif /* CONFIG_SEC_AP_HEALTH */
 
 #endif /* CONFIG_REGULATOR_CPR3 */
 

@@ -510,4 +510,14 @@ config DM_LOG_WRITES
 	  be called dm-log-writes.
 
 	  If unsure, say N.
+
+config CRYPTO_FDE_KEY_UPDATE
+	tristate "Update ICE key slot #2 for dm-req-crypt by outside key"
+	default n
+	---help---
+	  ICE key can change to sec key.
+	  It uses only slot #2.
+
+	  If unsure, say N.
+
 endif # MD

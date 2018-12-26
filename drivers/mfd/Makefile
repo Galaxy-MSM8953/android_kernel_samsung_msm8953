@@ -189,3 +189,9 @@ obj-$(CONFIG_WCD9330_CODEC)	+= wcd9xxx-core.o wcd9xxx-irq.o wcd9xxx-slimslave.o\
 obj-$(CONFIG_WCD9335_CODEC)	+= wcd9xxx-core.o wcd9xxx-irq.o wcd9xxx-slimslave.o\
 					wcd9xxx-core-resource.o wcd9335-regmap.o\
 					wcd9335-tables.o wcd-gpio-ctrl.o
+obj-$(CONFIG_MFD_SM5705)	+= sm5705.o sm5705-irq.o
+obj-$(CONFIG_MFD_SM5708)	+= sm5708.o sm5708-irq.o
+obj-$(CONFIG_MFD_SM5703) 	+= sm5703_core.o sm5703_irq.o
+obj-$(CONFIG_MFD_S2MU004)	+= s2mu004_core.o s2mu004_irq.o
+obj-$(CONFIG_MFD_S2MU005)	+= s2mu005_core.o s2mu005_irq.o
+obj-$(CONFIG_SEC_PM) += sec_ap_pmic.o

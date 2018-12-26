@@ -9,6 +9,10 @@
 #include "u_f.h"
 #include "u_os_desc.h"
 
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+#include <linux/usblog_proc_notify.h>
+#endif
+
 #ifdef CONFIG_USB_CONFIGFS_UEVENT
 #include <linux/platform_device.h>
 #include <linux/kdev_t.h>
@@ -452,6 +456,15 @@ static int config_usb_cfg_link(
 		ret = PTR_ERR(f);
 		goto out;
 	}
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+		if(!strcmp(fi->fd->name, "gsi")) {
+			printk(KERN_DEBUG "usb: %s f->%s\n", __func__, f->name);
+			store_usblog_notify(NOTIFY_USBMODE, (char *)(f->name), NULL);
+		} else {
+			printk(KERN_DEBUG "usb: %s f->%s\n", __func__, fi->fd->name);
+			store_usblog_notify(NOTIFY_USBMODE, (char *)(fi->fd->name), NULL);
+		}
+#endif
 
 	/* stash the function until we bind it to the gadget */
 	list_add_tail(&f->list, &cfg->func_list);
@@ -1499,6 +1512,9 @@ static void android_work(struct work_struct *data)
 	if (status[0]) {
 		kobject_uevent_env(&android_device->kobj,
 					KOBJ_CHANGE, connected);
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+		store_usblog_notify(NOTIFY_USBSTATE, connected[0], NULL);
+#endif
 		pr_info("%s: sent uevent %s\n", __func__, connected[0]);
 		uevent_sent = true;
 	}
@@ -1506,6 +1522,9 @@ static void android_work(struct work_struct *data)
 	if (status[1]) {
 		kobject_uevent_env(&android_device->kobj,
 					KOBJ_CHANGE, configured);
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+		store_usblog_notify(NOTIFY_USBSTATE, configured[0], NULL);
+#endif
 		pr_info("%s: sent uevent %s\n", __func__, configured[0]);
 		uevent_sent = true;
 	}
@@ -1513,6 +1532,9 @@ static void android_work(struct work_struct *data)
 	if (status[2]) {
 		kobject_uevent_env(&android_device->kobj,
 					KOBJ_CHANGE, disconnected);
+#ifdef CONFIG_USB_NOTIFY_PROC_LOG
+		store_usblog_notify(NOTIFY_USBSTATE, disconnected[0], NULL);
+#endif
 		pr_info("%s: sent uevent %s\n", __func__, disconnected[0]);
 		uevent_sent = true;
 	}

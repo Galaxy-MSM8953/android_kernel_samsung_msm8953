@@ -29,9 +29,16 @@
 #include "mdss_debug.h"
 #include "mdss_smmu.h"
 #include "mdss_dsi_phy.h"
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+#include "samsung/ss_dsi_panel_common.h"
+#endif
 
 #define VSYNC_PERIOD 17
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+#define DMA_TX_TIMEOUT 1000
+#else
 #define DMA_TX_TIMEOUT 200
+#endif
 #define DMA_TPG_FIFO_LEN 64
 
 #define FIFO_STATUS	0x0C
@@ -1057,6 +1064,7 @@ void mdss_dsi_op_mode_config(int mode,
 
 	if (mode == DSI_VIDEO_MODE) {
 		dsi_ctrl |= 0x03;
+
 		intr_ctrl = DSI_INTR_CMD_DMA_DONE_MASK | DSI_INTR_BTA_DONE_MASK
 			| DSI_INTR_ERROR_MASK;
 	} else {		/* command mode */
@@ -1113,7 +1121,11 @@ static int mdss_dsi_read_status(struct mdss_dsi_ctrl_pdata *ctrl)
 	int start = 0;
 	struct dcs_cmd_req cmdreq;
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	rc = 0;
+#else
 	rc = 1;
+#endif
 	lenp = ctrl->status_valid_params ?: ctrl->status_cmds_rlen;
 
 	for (i = 0; i < ctrl->status_cmds.cmd_cnt; ++i) {
@@ -1624,6 +1636,49 @@ static int mdss_dsi_cmd_dma_tpg_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	return ret;
 }
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+static void print_cmd_desc(struct mdss_dsi_ctrl_pdata *ctrl,
+		struct dsi_cmd_desc *cmds, int cnt)
+{
+	struct samsung_display_driver_data *vdd = NULL;
+	char buf[1016]; /* temp 1024 -> 1000*/
+	int len;
+	int i, j;
+
+	if (IS_ERR_OR_NULL(ctrl))
+		return;
+
+	vdd = check_valid_ctrl(ctrl);
+
+	if (IS_ERR_OR_NULL(vdd))
+		return;
+
+	if (!vdd->debug_data->print_cmds) {
+		LCD_DEBUG("print_cmds is disabled(%s)",
+				vdd->debug_data->print_cmds ? "enabled" : "disabled");
+		return;
+	}
+
+	for (j = 0; j < cnt; j++) {
+		len = 0;
+		len += snprintf(buf, sizeof(buf), "%02x ", cmds[j].dchdr.dtype);
+		len += snprintf(buf + len, sizeof(buf), "%02x ", cmds[j].dchdr.last);
+		len += snprintf(buf + len, sizeof(buf), "%02x ", cmds[j].dchdr.vc);
+		len += snprintf(buf + len, sizeof(buf), "%02x ", cmds[j].dchdr.ack);
+		len += snprintf(buf + len, sizeof(buf), "%02x ", cmds[j].dchdr.wait);
+		len += snprintf(buf + len, sizeof(buf), "%02x ", cmds[j].dchdr.dlen);
+
+		for (i = 0; i < cmds[j].dchdr.dlen; i++)
+			len += snprintf(buf + len, sizeof(buf), "%02x ", cmds[j].payload[i]);
+
+		LCD_INFO("(%02d) %s\n", j, buf);
+	}
+
+	return;
+}
+
+#endif
+
 static int mdss_dsi_cmds2buf_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 			struct dsi_cmd_desc *cmds, int cnt, int use_dma_tpg)
 {
@@ -1636,6 +1691,11 @@ static int mdss_dsi_cmds2buf_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	mdss_dsi_buf_init(tp);
 	cm = cmds;
 	len = 0;
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	print_cmd_desc(ctrl, cmds, cnt);
+#endif
+
 	while (cnt--) {
 		dchdr = &cm->dchdr;
 		mdss_dsi_buf_reserve(tp, len);
@@ -2032,6 +2092,10 @@ static int mdss_dsi_cmd_dma_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	struct mdss_dsi_ctrl_pdata *mctrl = NULL;
 	int ignored = 0;	/* overflow ignored */
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+	int retry_cnt;
+#endif
+
 	bp = tp->data;
 
 	len = ALIGN(tp->len, 4);
@@ -2041,6 +2105,24 @@ static int mdss_dsi_cmd_dma_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	if (ctrl->mdss_util->iommu_attached()) {
 		ret = mdss_smmu_dsi_map_buffer(tp->dmap, domain, ctrl->dma_size,
 			&(ctrl->dma_addr), tp->start, DMA_TO_DEVICE);
+
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		if (IS_ERR_VALUE(ret)) {
+			if (!in_interrupt()) {
+				for (retry_cnt = 0; retry_cnt < 62 ; retry_cnt++) {
+					/* To wait free page by memory reclaim*/
+					msleep(16);
+
+					pr_err("dma map sg failed : retry (%d)\n", retry_cnt);
+					ret = mdss_smmu_dsi_map_buffer(tp->dmap, domain, ctrl->dma_size,
+						&(ctrl->dma_addr), tp->start, DMA_TO_DEVICE);
+
+					if (!IS_ERR_VALUE(ret))
+						break;
+				}
+			}
+		}
+#endif
 		if (IS_ERR_VALUE(ret)) {
 			pr_err("unable to map dma memory to iommu(%d)\n", ret);
 			ctrl->mdss_util->iommu_unlock();
@@ -2271,6 +2353,58 @@ static int mdss_dsi_bus_bandwidth_vote(struct dsi_shared_data *sdata, bool on)
 	return rc;
 }
 
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+void mdss_dsi_samsung_poc_perf_mode_ctl(struct mdss_dsi_ctrl_pdata *ctrl, int enable)
+{
+	static int pre_enable;
+	int rc = 0;
+
+	if (IS_ERR_OR_NULL(ctrl))
+		return;
+
+	if (enable) {
+		if (pre_enable == false) {
+			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON);
+			mdss_bus_bandwidth_ctrl(true);
+
+			mdss_res->ib_factor.numer = mdss_res->ib_factor.numer << 3;
+			mdss_res->ab_factor.numer = mdss_res->ab_factor.numer << 3;
+
+			rc = mdss_dsi_bus_bandwidth_vote(ctrl->shared_data, true);
+			if (rc) {
+				pr_err("%s: Bus bw vote failed\n", __func__);
+				return;
+			}
+
+			if (ctrl->mdss_util->iommu_ctrl) {
+				rc = ctrl->mdss_util->iommu_ctrl(1);
+				if (IS_ERR_VALUE(rc)) {
+					pr_err("IOMMU attach failed\n");
+					return;
+				}
+			}
+			mdss_dsi_clk_ctrl(ctrl, ctrl->dsi_clk_handle, MDSS_DSI_ALL_CLKS,
+				  MDSS_DSI_CLK_ON);
+			pre_enable = true;
+		}
+	} else {
+		if (pre_enable == true) {
+			if (ctrl->mdss_util->iommu_ctrl)
+				ctrl->mdss_util->iommu_ctrl(0);
+
+			mdss_dsi_bus_bandwidth_vote(ctrl->shared_data, false);
+
+			mdss_dsi_clk_ctrl(ctrl, ctrl->dsi_clk_handle, MDSS_DSI_ALL_CLKS,
+				  MDSS_DSI_CLK_OFF);
+			mdss_res->ib_factor.numer = mdss_res->ib_factor.numer >> 3;
+			mdss_res->ab_factor.numer = mdss_res->ab_factor.numer >> 3;
+			mdss_bus_bandwidth_ctrl(false);
+			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
+			pre_enable = false;
+		}
+	}
+}
+#endif
 
 int mdss_dsi_en_wait4dynamic_done(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -2519,7 +2653,11 @@ int mdss_dsi_cmdlist_rx(struct mdss_dsi_ctrl_pdata *ctrl,
 		rp = &ctrl->rx_buf;
 		len = mdss_dsi_cmds_rx(ctrl, req->cmds, req->rlen,
 				(req->flags & CMD_REQ_DMA_TPG));
+#if defined(CONFIG_FB_MSM_MDSS_SAMSUNG)
+		pr_debug("%s skip memcopy to req-buffer from rx buffer", __func__);
+#else
 		memcpy(req->rbuf, rp->data, rp->len);
+#endif
 		ctrl->rx_len = len;
 	} else {
 		pr_err("%s: No rx buffer provided\n", __func__);

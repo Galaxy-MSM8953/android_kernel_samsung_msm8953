@@ -37,6 +37,10 @@
 #include <linux/rmap.h>
 #include "internal.h"
 
+#ifdef CONFIG_SDP
+#include <sdp/cache_cleanup.h>
+#endif
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/filemap.h>
 
@@ -180,6 +184,11 @@ static void page_cache_tree_delete(struct address_space *mapping,
 void __delete_from_page_cache(struct page *page, void *shadow)
 {
 	struct address_space *mapping = page->mapping;
+
+#ifdef CONFIG_SDP
+	if(mapping_sensitive(mapping))
+		sdp_page_cleanup(page);
+#endif
 
 	trace_mm_filemap_delete_from_page_cache(page);
 	/*
@@ -1812,7 +1821,14 @@ static void do_sync_mmap_readahead(struct vm_area_struct *vma,
 	/*
 	 * mmap read-around
 	 */
+#if CONFIG_MMAP_READAROUND_LIMIT == 0
 	ra_pages = max_sane_readahead(ra->ra_pages);
+#else
+	if (ra->ra_pages > CONFIG_MMAP_READAROUND_LIMIT)
+		ra_pages = max_sane_readahead(CONFIG_MMAP_READAROUND_LIMIT);
+	else
+		ra_pages = max_sane_readahead(ra->ra_pages);
+#endif
 	ra->start = max_t(long, 0, offset - ra_pages / 2);
 	ra->size = ra_pages;
 	ra->async_size = ra_pages / 4;
@@ -2449,6 +2465,25 @@ struct page *grab_cache_page_write_begin(struct address_space *mapping,
 }
 EXPORT_SYMBOL(grab_cache_page_write_begin);
 
+static inline struct backing_dev_info *inode_to_bdi(struct inode *inode)
+{
+    struct super_block *sb = inode->i_sb;
+
+    if (sb_is_blkdev_sb(sb))
+        return inode->i_mapping->backing_dev_info;
+
+    return sb->s_bdi;
+}
+
+static bool block_device_ejected(struct inode *inode)
+{
+	struct backing_dev_info *bdi = inode_to_bdi(inode);
+
+	if (unlikely(bdi_cap_account_writeback(bdi) && !bdi->dev))
+		return true;
+	return false;
+}
+
 ssize_t generic_perform_write(struct file *file,
 				struct iov_iter *i, loff_t pos)
 {
@@ -2493,6 +2528,12 @@ again:
 
 		if (fatal_signal_pending(current)) {
 			status = -EINTR;
+			break;
+		}
+
+		/* Check whether a device has been ejected or not */
+		if (unlikely(block_device_ejected(mapping->host))) {
+			status = -EIO;
 			break;
 		}
 

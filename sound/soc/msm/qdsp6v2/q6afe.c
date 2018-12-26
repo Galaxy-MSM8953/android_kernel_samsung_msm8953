@@ -29,6 +29,10 @@
 #include <sound/adsp_err.h>
 #include <linux/qdsp6v2/apr_tal.h>
 
+#ifdef CONFIG_SEC_SND_ADAPTATION
+#include <sound/sec_adaptation.h>
+#endif
+
 #define WAKELOCK_TIMEOUT	5000
 enum {
 	AFE_COMMON_RX_CAL = 0,
@@ -1275,6 +1279,26 @@ unlock:
 	mutex_unlock(&this_afe.cal_data[AFE_TOPOLOGY_CAL]->lock);
 	return ret;
 }
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+static int afe_validate_cal(u16 port_id)
+{
+	int ret = 0;
+	u32 topology_id = 0;
+
+	ret = afe_get_cal_topology_id(port_id, &topology_id);
+	if (ret || !topology_id) {
+		pr_debug("%s: AFE port[%d] get_cal_topology[%d] invalid!\n",
+				__func__, port_id, topology_id);
+		goto done;
+	}
+
+	ret = q6audio_get_afe_cal_validation(port_id, topology_id);
+
+done:
+	return ret;
+}
+#endif
 
 static int afe_send_port_topology_id(u16 port_id)
 {
@@ -2630,7 +2654,7 @@ int afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
 	}
 
-	pr_debug("%s: port id: 0x%x\n", __func__, port_id);
+	pr_info("%s: port id: 0x%x\n", __func__, port_id);
 
 	index = q6audio_get_port_index(port_id);
 	if (index < 0 || index > AFE_MAX_PORTS) {
@@ -2655,9 +2679,15 @@ int afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	port_index = afe_get_port_index(port_id);
 	if (!(this_afe.afe_cal_mode[port_index] == AFE_CAL_MODE_NONE)) {
 		/* One time call: only for first time */
-		afe_send_custom_topology();
-		afe_send_port_topology_id(port_id);
-		afe_send_cal(port_id);
+#ifdef CONFIG_SEC_SND_ADAPTATION
+		if (afe_validate_cal(port_id)) {
+#endif
+			afe_send_custom_topology();
+			afe_send_port_topology_id(port_id);
+			afe_send_cal(port_id);
+#ifdef CONFIG_SEC_SND_ADAPTATION
+		}
+#endif
 		afe_send_hw_delay(port_id, rate);
 	}
 
@@ -4759,7 +4789,7 @@ int afe_close(int port_id)
 		ret = -EINVAL;
 		goto fail_cmd;
 	}
-	pr_debug("%s: port_id = 0x%x\n", __func__, port_id);
+	pr_info("%s: port_id = 0x%x\n", __func__, port_id);
 	if ((port_id == RT_PROXY_DAI_001_RX) ||
 			(port_id == RT_PROXY_DAI_002_TX)) {
 		pr_debug("%s: before decrementing pcm_afe_instance %d\n",

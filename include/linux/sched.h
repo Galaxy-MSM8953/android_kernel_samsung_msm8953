@@ -175,6 +175,7 @@ extern void get_iowait_load(unsigned long *nr_waiters, unsigned long *load);
 
 extern void sched_update_nr_prod(int cpu, long delta, bool inc);
 extern void sched_get_nr_running_avg(int *avg, int *iowait_avg, int *big_avg);
+extern u64 sched_get_cpu_last_busy_time(int cpu);
 
 extern void calc_global_load(unsigned long ticks);
 extern void update_cpu_load_nohz(void);
@@ -1193,6 +1194,10 @@ struct ravg {
 	u64 mark_start;
 	u32 sum, demand;
 	u32 sum_history[RAVG_HIST_SIZE_MAX];
+#ifdef CONFIG_SEC_ADAPTIVE_LOAD_TRACKING
+	u32 global_average;
+	u32 nr_global_average;
+#endif
 #ifdef CONFIG_SCHED_FREQ_INPUT
 	u32 curr_window, prev_window;
 	u16 active_windows;
@@ -1308,6 +1313,10 @@ union rcu_special {
 	short s;
 };
 struct rcu_node;
+
+#ifdef CONFIG_FIVE
+struct task_integrity;
+#endif
 
 enum perf_event_task_context {
 	perf_invalid_context = -1,
@@ -1780,6 +1789,13 @@ struct task_struct {
 #if defined(CONFIG_BCACHE) || defined(CONFIG_BCACHE_MODULE)
 	unsigned int	sequential_io;
 	unsigned int	sequential_io_avg;
+#endif
+#ifdef CONFIG_SDP
+	unsigned int sensitive;
+#endif
+
+#ifdef CONFIG_FIVE
+	struct task_integrity *integrity;
 #endif
 };
 

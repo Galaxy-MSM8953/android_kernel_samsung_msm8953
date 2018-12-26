@@ -1461,14 +1461,23 @@ static ssize_t gsi_ctrl_dev_write(struct file *fp, const char __user *buf,
 	struct gsi_ctrl_port *c_port = container_of(fp->private_data,
 						struct gsi_ctrl_port,
 						ctrl_device);
-	struct f_gsi *gsi = c_port_to_gsi(c_port);
-	struct usb_request *req = c_port->notify_req;
+	struct f_gsi *gsi;
+	struct usb_request *req;
+
+	if (!c_port) {
+		log_event_err("%s: c_port %p",
+			__func__, c_port);
+		return -ENODEV;
+	}
+
+	gsi = c_port_to_gsi(c_port);
+	req = c_port->notify_req;
 
 	log_event_dbg("Enter %zu", count);
 
-	if (!c_port || !req || !req->buf) {
-		log_event_err("%s: c_port %pK req %pK req->buf %pK",
-			__func__, c_port, req, req ? req->buf : req);
+	if (!req || !req->buf) {
+		log_event_err("%s: req %p req->buf %p",
+			__func__, req, req ? req->buf : req);
 		return -ENODEV;
 	}
 
@@ -2979,7 +2988,7 @@ static int gsi_bind(struct usb_configuration *c, struct usb_function *f)
 		/* export host's Ethernet address in CDC format */
 		random_ether_addr(gsi->d_port.ipa_init_params.device_ethaddr);
 		random_ether_addr(gsi->d_port.ipa_init_params.host_ethaddr);
-		log_event_dbg("setting host_ethaddr=%pM, device_ethaddr = %pM",
+		log_event_dbg("setting host_ethaddr=%pKM, device_ethaddr = %pKM",
 		gsi->d_port.ipa_init_params.host_ethaddr,
 		gsi->d_port.ipa_init_params.device_ethaddr);
 		memcpy(gsi->ethaddr, &gsi->d_port.ipa_init_params.host_ethaddr,
@@ -3111,7 +3120,7 @@ static int gsi_bind(struct usb_configuration *c, struct usb_function *f)
 		/* export host's Ethernet address in CDC format */
 		random_ether_addr(gsi->d_port.ipa_init_params.device_ethaddr);
 		random_ether_addr(gsi->d_port.ipa_init_params.host_ethaddr);
-		log_event_dbg("setting host_ethaddr=%pM, device_ethaddr = %pM",
+		log_event_dbg("setting host_ethaddr=%pKM, device_ethaddr = %pKM",
 		gsi->d_port.ipa_init_params.host_ethaddr,
 		gsi->d_port.ipa_init_params.device_ethaddr);
 

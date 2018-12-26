@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2009-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,15 +21,13 @@
 #include <soc/qcom/camera2.h>
 #include "msm_camera_i2c.h"
 #include "msm_sd.h"
+#include <linux/leds/msm_ext_pmic_flash.h>
 
 #define DEFINE_MSM_MUTEX(mutexname) \
 	static struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
 
 enum msm_camera_flash_state_t {
 	MSM_CAMERA_FLASH_INIT,
-	MSM_CAMERA_FLASH_OFF,
-	MSM_CAMERA_FLASH_LOW,
-	MSM_CAMERA_FLASH_HIGH,
 	MSM_CAMERA_FLASH_RELEASE,
 };
 
@@ -44,6 +42,8 @@ struct msm_flash_func_t {
 	int32_t (*camera_flash_low)(struct msm_flash_ctrl_t *,
 		struct msm_flash_cfg_data_t *);
 	int32_t (*camera_flash_high)(struct msm_flash_ctrl_t *,
+		struct msm_flash_cfg_data_t *);
+	int32_t (*camera_flash_torch)(struct msm_flash_ctrl_t *,
 		struct msm_flash_cfg_data_t *);
 };
 
@@ -61,10 +61,12 @@ struct msm_flash_reg_t {
 };
 
 struct msm_flash_ctrl_t {
+	const char *FlashName;
 	struct msm_camera_i2c_client flash_i2c_client;
 	struct msm_sd_subdev msm_sd;
 	struct platform_device *pdev;
 	struct msm_flash_func_t *func_tbl;
+	ext_pmic_flash_func_t ext_pmic_func_tbl;
 	struct msm_camera_power_ctrl_t power_info;
 
 	/* Switch node to trigger led */
