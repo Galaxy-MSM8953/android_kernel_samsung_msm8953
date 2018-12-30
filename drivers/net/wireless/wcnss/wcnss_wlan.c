@@ -2396,22 +2396,12 @@ static void wcnss_nvbin_dnld(void)
 
 	down_read(&wcnss_pm_sem);
 
-	if (CONFIG_WLAN_USE_OLD_NV != 0 && system_rev <= CONFIG_WLAN_USE_OLD_NV) {
-		ret = request_firmware(&nv, NVBIN_FILE_OLD, dev);
+	ret = request_firmware(&nv, NVBIN_FILE, dev);
 		
-		if (ret || !nv || !nv->data || !nv->size) {
-			pr_err("wcnss: %s: request_firmware failed for %s (ret = %d)\n",
-				__func__, NVBIN_FILE_OLD, ret);
-			goto out;
-		}
-	}else {
-		ret = request_firmware(&nv, NVBIN_FILE, dev);
-		
-		if (ret || !nv || !nv->data || !nv->size) {
-			pr_err("wcnss: %s: request_firmware failed for %s (ret = %d)\n",
-				__func__, NVBIN_FILE, ret);
-			goto out;
-		}
+	if (ret || !nv || !nv->data || !nv->size) {
+		pr_err("wcnss: %s: request_firmware failed for %s (ret = %d)\n",
+			__func__, NVBIN_FILE, ret);
+		goto out;
 	}
 
 	/* First 4 bytes in nv blob is validity bitmap.
