@@ -21,15 +21,75 @@
 #include <soc/qcom/camera2.h>
 #include "msm_camera_i2c.h"
 #include "msm_sd.h"
+#include <linux/leds/msm_ext_pmic_flash.h>
 
 #define DEFINE_MSM_MUTEX(mutexname) \
 	static struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
+
+#define DECIPHER_FLASH(ctrl, _f_, data)                                             \
+	do {                                                                            \
+		if (ctrl->num_of_pmic_source == 1)                                          \
+		{                                                                           \
+			switch (ctrl->flash_operation_type)                                     \
+			{                                                                       \
+				case MONO:                                                          \
+				{                                                                   \
+					switch (data->flash_position)                                   \
+					{                                                               \
+						case REAR:                                                  \
+							led_ctrl.index = 0;                                     \
+							ctrl->ext_pmic_func_tbl._f_(&led_ctrl);                 \
+							break;                                                  \
+						case FRONT:                                                 \
+							led_ctrl.index = 1;                                     \
+							ctrl->ext_pmic_func_tbl._f_(&led_ctrl);                 \
+							break;                                                  \
+																					\
+						default:                                                    \
+							pr_err("%s: Invalid flash position: %d\n",              \
+								__func__, data->flash_position);                    \
+							return -EFAULT;                                         \
+					}                                                               \
+				}                                                                   \
+				break;                                                              \
+																					\
+				case DUAL:                                                          \
+				{                                                                   \
+					switch (data->flash_position)                                   \
+					{                                                               \
+						case REAR:                                                  \
+							led_ctrl.index = 0;                                     \
+							ctrl->ext_pmic_func_tbl._f_(&led_ctrl);                 \
+																					\
+							led_ctrl.index = 1;                                     \
+							ctrl->ext_pmic_func_tbl._f_(&led_ctrl);                 \
+							break;                                                  \
+																					\
+						case FRONT:                                                 \
+						default:                                                    \
+							pr_err("%s: Invalid flash position: %d\n", __func__,    \
+								data->flash_position);                              \
+							return -EFAULT;                                         \
+					}                                                               \
+				}                                                                   \
+				break;                                                              \
+																					\
+				default:                                                            \
+					pr_err("invalid flash_operation_type. Return Error");           \
+					return -EFAULT;                                                 \
+			}                                                                       \
+		} else {                                                                    \
+			pr_err("PMIC Source is MORE than 1 .. Not Supported");                  \
+			return -EFAULT;                                                         \
+		}                                                                           \
+	} while(0)
 
 enum msm_camera_flash_state_t {
 	MSM_CAMERA_FLASH_INIT,
 	MSM_CAMERA_FLASH_OFF,
 	MSM_CAMERA_FLASH_LOW,
 	MSM_CAMERA_FLASH_HIGH,
+	MSM_CAMERA_FLASH_TORCH,
 	MSM_CAMERA_FLASH_RELEASE,
 };
 
@@ -45,6 +105,11 @@ struct msm_flash_func_t {
 		struct msm_flash_cfg_data_t *);
 	int32_t (*camera_flash_high)(struct msm_flash_ctrl_t *,
 		struct msm_flash_cfg_data_t *);
+	int32_t (*camera_flash_torch)(struct msm_flash_ctrl_t *,
+		struct msm_flash_cfg_data_t *);
+	int32_t (*camera_flash_query_current)(struct msm_flash_ctrl_t *,
+		struct msm_flash_query_data_t *);
+
 };
 
 struct msm_flash_table {
@@ -61,15 +126,18 @@ struct msm_flash_reg_t {
 };
 
 struct msm_flash_ctrl_t {
+	const char *FlashName;
 	struct msm_camera_i2c_client flash_i2c_client;
 	struct msm_sd_subdev msm_sd;
 	struct platform_device *pdev;
 	struct msm_flash_func_t *func_tbl;
+	ext_pmic_flash_func_t ext_pmic_func_tbl;
 	struct msm_camera_power_ctrl_t power_info;
 
 	/* Switch node to trigger led */
 	const char *switch_trigger_name;
 	struct led_trigger *switch_trigger;
+	uint32_t is_regulator_enabled;
 
 	/* Flash */
 	uint32_t flash_num_sources;
@@ -98,6 +166,10 @@ struct msm_flash_ctrl_t {
 
 	/* flash state */
 	enum msm_camera_flash_state_t flash_state;
+	
+    /* Multiple PMIC support */
+    enum flash_operation_type_t flash_operation_type;
+    uint32_t num_of_pmic_source;
 };
 
 int msm_flash_i2c_probe(struct i2c_client *client,

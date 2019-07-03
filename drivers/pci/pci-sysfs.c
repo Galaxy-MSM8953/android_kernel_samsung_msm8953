@@ -539,7 +539,7 @@ static ssize_t driver_override_store(struct device *dev,
 		pdev->driver_override = NULL;
 	}
 	device_unlock(dev);
-
+	
 	kfree(old);
 
 	return count;
@@ -552,7 +552,7 @@ static ssize_t driver_override_show(struct device *dev,
 	ssize_t len;
 
 	device_lock(dev);
-	len = snprintf(buf, PAGE_SIZE, "%s\n", pdev->driver_override);
+	len = sprintf(buf, "%s\n", pdev->driver_override);
 	device_unlock(dev);
 	return len;
 }

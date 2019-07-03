@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2002,2007-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -160,6 +160,14 @@ unsigned int *adreno_ringbuffer_allocspace(struct adreno_ringbuffer *rb,
 	unsigned int rptr = adreno_get_rptr(rb);
 	unsigned int ret;
 
+	/*
+	 * Start the starvation timer if this ringbuffer is not current
+	 * so that this can be picked up once timer expires.
+	 */
+	if ((adreno_dev->cur_rb != rb) && (rptr == rb->_wptr)) {
+		mod_timer(&rb->timer, jiffies +
+			msecs_to_jiffies(adreno_dispatch_starvation_time));
+	}
 	if (rptr <= rb->_wptr) {
 		unsigned int *cmds;
 
@@ -204,6 +212,9 @@ int adreno_ringbuffer_start(struct adreno_device *adreno_dev,
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
 	struct adreno_ringbuffer *rb;
 	int i;
+
+	/* Clear the starved ringbuffer mask */
+	adreno_dev->preempt.starved = 0;
 
 	/* Setup the ringbuffers state before we start */
 	FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {

@@ -30,6 +30,7 @@
 #include "diagmem.h"
 #include "diagfwd.h"
 #include "diagfwd_peripheral.h"
+#include "diag_ipc_logging.h"
 
 struct diag_md_info diag_md[NUM_DIAG_MD_DEV] = {
 	{
@@ -156,14 +157,18 @@ int diag_md_write(int id, unsigned char *buf, int len, int ctx)
 	if (peripheral > NUM_PERIPHERALS)
 		return -EINVAL;
 
+	DIAG_LOG(DIAG_DEBUG_PERIPHERALS, "%s:%d: waiting on md_session_lock\n", __func__, __LINE__);
 	mutex_lock(&driver->md_session_lock);
+	DIAG_LOG(DIAG_DEBUG_PERIPHERALS, "%s:%d: acquired md_session_lock\n", __func__, __LINE__);
 	session_info = diag_md_session_get_peripheral(peripheral);
 	if (!session_info) {
 		mutex_unlock(&driver->md_session_lock);
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS, "%s:%d: released md_session_lock\n", __func__, __LINE__);
 		return -EIO;
 	}
 	pid = session_info->pid;
 	mutex_unlock(&driver->md_session_lock);
+	DIAG_LOG(DIAG_DEBUG_PERIPHERALS, "%s:%d: released md_session_lock\n", __func__, __LINE__);
 
 	ch = &diag_md[id];
 	if (!ch || !ch->md_info_inited)
@@ -209,7 +214,10 @@ int diag_md_write(int id, unsigned char *buf, int len, int ctx)
 			continue;
 
 		found = 1;
-		driver->data_ready[i] |= USER_SPACE_DATA_TYPE;
+		if (!(driver->data_ready[i] & USER_SPACE_DATA_TYPE)) {
+			driver->data_ready[i] |= USER_SPACE_DATA_TYPE;
+			atomic_inc(&driver->data_ready_notif[i]);
+		}
 		pr_debug("diag: wake up logging process\n");
 		wake_up_interruptible(&driver->wait_q);
 	}

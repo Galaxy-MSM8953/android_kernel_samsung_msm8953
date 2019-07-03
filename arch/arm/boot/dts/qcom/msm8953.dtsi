@@ -39,6 +39,24 @@
 					fsmgr_flags = "wait,verify";
 					status = "ok";
 				};
+			
+				odm {
+					compatible = "android,odm";
+					dev = "/dev/block/platform/soc/7824900.sdhci/by-name/odm";
+					type = "ext4";
+					mnt_flags = "ro,barrier=1,discard";
+					fsmgr_flags = "wait,verify";
+					status = "ok";
+				};
+				system {
+					compatible = "android,system";
+					dev = "/dev/block/platform/soc/7824900.sdhci/by-name/system";
+					type = "ext4";
+					mnt_flags = "ro,barrier=1,discard";
+					fsmgr_flags = "wait,verify";
+					status = "ok";
+				};
+
 			};
 		};
 	};
@@ -530,6 +548,7 @@
 		qcom,vdd-restriction-temp-hysteresis = <10>;
 		vdd-dig-supply = <&pm8953_s2_floor_level>;
 		vdd-gfx-supply = <&gfx_vreg_corner>;
+		qcom,therm-ddr-lm-info = <1 75 70>;
 
 		qcom,vdd-dig-rstr {
 			qcom,vdd-rstr-reg = "vdd-dig";
@@ -2181,8 +2200,7 @@
 		compatible = "qcom,qusb2phy";
 		reg = <0x079000 0x180>,
 			<0x01841030 0x4>,
-			<0x0193f044 0x4>,
-			<0x0193f020 0x4>;
+			<0x0193f044 0x4>;
 		reg-names = "qusb_phy_base",
 			"ref_clk_addr",
 			"tcsr_phy_clk_scheme_sel",
@@ -2346,8 +2364,9 @@
 #include "msm-pm8953-rpm-regulator.dtsi"
 #include "msm-pm8953.dtsi"
 #include "msm8953-regulator.dtsi"
-#include "msm-audio.dtsi"
-#include "msm8953-audio.dtsi"
+/* #include "msm-pmi8950.dtsi" */
+/* #include "msm-audio.dtsi" */
+/* #include "msm8953-audio.dtsi" */
 #include "msm-gdsc-8916.dtsi"
 #include "msm8953-camera.dtsi"
 #include "msm8953-mdss.dtsi"

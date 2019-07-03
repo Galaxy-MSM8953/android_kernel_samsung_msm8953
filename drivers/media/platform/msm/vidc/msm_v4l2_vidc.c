@@ -36,7 +36,11 @@
 
 struct msm_vidc_drv *vidc_driver;
 
+#if defined(CONFIG_SEC_J4CORELTE_PROJECT)
+uint32_t msm_vidc_pwr_collapse_delay = 5000;
+#else
 uint32_t msm_vidc_pwr_collapse_delay = 2000;
+#endif
 
 static inline struct msm_vidc_inst *get_vidc_inst(struct file *filp, void *fh)
 {

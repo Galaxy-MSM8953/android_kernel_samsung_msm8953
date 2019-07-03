@@ -20,6 +20,7 @@
 #include <linux/integrity.h>
 #include <linux/ima.h>
 #include <linux/evm.h>
+#include <linux/proca.h>
 #include <linux/fsnotify.h>
 #include <linux/mman.h>
 #include <linux/mount.h>
@@ -27,6 +28,7 @@
 #include <linux/backing-dev.h>
 #include <linux/pfk.h>
 #include <net/flow.h>
+#include <linux/task_integrity.h>
 
 #define MAX_LSM_EVM_XATTR	2
 
@@ -242,6 +244,9 @@ int security_bprm_check(struct linux_binprm *bprm)
 	int ret;
 
 	ret = security_ops->bprm_check_security(bprm);
+	if (ret)
+		return ret;
+	ret = five_bprm_check(bprm);
 	if (ret)
 		return ret;
 	return ima_bprm_check(bprm);
@@ -634,6 +639,9 @@ int security_inode_setxattr(struct dentry *dentry, const char *name,
 	ret = security_ops->inode_setxattr(dentry, name, value, size, flags);
 	if (ret)
 		return ret;
+	ret = five_inode_setxattr(dentry, name, value, size);
+	if (ret)
+		return ret;
 	ret = ima_inode_setxattr(dentry, name, value, size);
 	if (ret)
 		return ret;
@@ -670,6 +678,9 @@ int security_inode_removexattr(struct dentry *dentry, const char *name)
 	if (unlikely(IS_PRIVATE(dentry->d_inode)))
 		return 0;
 	ret = security_ops->inode_removexattr(dentry, name);
+	if (ret)
+		return ret;
+	ret = five_inode_removexattr(dentry, name);
 	if (ret)
 		return ret;
 	ret = ima_inode_removexattr(dentry, name);
@@ -734,6 +745,9 @@ int security_file_alloc(struct file *file)
 void security_file_free(struct file *file)
 {
 	security_ops->file_free_security(file);
+#ifdef CONFIG_PROCA
+	proca_compat_file_free_security_hook(file);
+#endif
 }
 
 int security_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
@@ -781,6 +795,9 @@ int security_mmap_file(struct file *file, unsigned long prot,
 	int ret;
 	ret = security_ops->mmap_file(file, prot,
 					mmap_prot(file, prot), flags);
+	if (ret)
+		return ret;
+	ret = five_file_mmap(file, prot);
 	if (ret)
 		return ret;
 	return ima_file_mmap(file, prot);
@@ -855,6 +872,10 @@ void security_task_free(struct task_struct *task)
 	yama_task_free(task);
 #endif
 	security_ops->task_free(task);
+	five_task_free(task);
+#ifdef CONFIG_PROCA
+	proca_compat_task_free_hook(task);
+#endif
 }
 
 int security_cred_alloc_blank(struct cred *cred, gfp_t gfp)

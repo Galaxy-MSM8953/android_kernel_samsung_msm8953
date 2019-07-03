@@ -448,6 +448,10 @@ int bdi_init(struct backing_dev_info *bdi)
 
 	bdi_wb_init(&bdi->wb, bdi);
 
+	bdi->last_thresh = 0;
+	bdi->last_nr_dirty = 0;
+	bdi->paused_total = 0;
+
 	for (i = 0; i < NR_BDI_STAT_ITEMS; i++) {
 		err = percpu_counter_init(&bdi->bdi_stat[i], 0, GFP_KERNEL);
 		if (err)

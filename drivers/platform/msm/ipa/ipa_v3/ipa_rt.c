@@ -1720,7 +1720,7 @@ int ipa3_reset_rt(enum ipa_ip_type ip, bool user_only)
 				list_del(&rule->link);
 				if (rule->hdr) {
 					hdr_entry = ipa3_id_find(
-							rule->rule.hdr_hdl);
+						rule->rule.hdr_hdl);
 					if (!hdr_entry ||
 					hdr_entry->cookie != IPA_HDR_COOKIE) {
 						IPAERR_RL(
@@ -1738,7 +1738,7 @@ int ipa3_reset_rt(enum ipa_ip_type ip, bool user_only)
 						"Proc entry already deleted\n");
 						return -EINVAL;
 					}
-				}
+				}									
 				tbl->rule_cnt--;
 				if (rule->hdr)
 					__ipa3_release_hdr(rule->hdr->id);

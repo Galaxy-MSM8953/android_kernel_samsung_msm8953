@@ -12,6 +12,7 @@
  */
 
 #include "u_f.h"
+#include <linux/usb/ch9.h>
 
 struct usb_request *alloc_ep_req(struct usb_ep *ep, int len, int default_len)
 {

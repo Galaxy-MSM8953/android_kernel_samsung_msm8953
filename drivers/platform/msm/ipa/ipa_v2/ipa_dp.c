@@ -57,6 +57,10 @@
 
 #define IPA_HEADROOM 128
 
+#define MAX_RETRY_ALLOC 10
+#define ALLOC_MIN_SLEEP_RX 100000
+#define ALLOC_MAX_SLEEP_RX 200000
+
 static struct sk_buff *ipa_get_skb_ipa_rx(unsigned int len, gfp_t flags);
 static void ipa_replenish_wlan_rx_cache(struct ipa_sys_context *sys);
 static void ipa_replenish_rx_cache(struct ipa_sys_context *sys);
@@ -647,6 +651,7 @@ int ipa_send_cmd(u16 num_desc, struct ipa_desc *descr)
 {
 	struct ipa_desc *desc;
 	int i, result = 0;
+	u32 retry_cnt = 0;
 	struct ipa_sys_context *sys;
 	int ep_idx;
 
@@ -686,7 +691,20 @@ int ipa_send_cmd(u16 num_desc, struct ipa_desc *descr)
 
 		desc->callback = ipa_sps_irq_cmd_ack;
 		desc->user1 = desc;
-		if (ipa_send(sys, num_desc, descr, true)) {
+retry_alloc:
+		result = ipa_send(sys, num_desc, descr, true);
+		if (result) {
+			if (result == -ENOMEM) {
+				if (retry_cnt < MAX_RETRY_ALLOC) {
+					IPADBG(
+					"Failed to alloc memory retry count %d\n",
+					retry_cnt);
+					retry_cnt++; 
+					usleep_range(ALLOC_MIN_SLEEP_RX,
+					ALLOC_MAX_SLEEP_RX);
+					goto retry_alloc;
+				}
+			}
 			IPAERR("fail to send multiple immediate command set\n");
 			result = -EFAULT;
 			goto bail;
@@ -841,7 +859,7 @@ static void ipa_rx_switch_to_intr_mode(struct ipa_sys_context *sys)
 	}
 
 	if (!atomic_read(&sys->curr_polling_state)) {
-		IPAERR("already in intr mode\n");
+		IPAERR("Not in poll mode, and IRQ not enabled.\n");
 		goto fail;
 	}
 

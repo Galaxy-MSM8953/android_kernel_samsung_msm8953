@@ -376,6 +376,7 @@ struct kgsl_context {
 	struct kgsl_pwr_constraint pwr_constraint;
 	unsigned int fault_count;
 	unsigned long fault_time;
+	u64 timers[3];
 };
 
 #define _context_comm(_c) \

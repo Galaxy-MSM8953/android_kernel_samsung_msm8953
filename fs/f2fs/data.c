@@ -170,6 +170,8 @@ static void f2fs_write_end_io(struct bio *bio, int err)
 
 		if (unlikely(err)) {
 			set_bit(AS_EIO, &page->mapping->flags);
+			f2fs_bug_on(sbi, page->mapping == NODE_MAPPING(sbi) ||
+					 page->mapping == META_MAPPING(sbi));
 			if (type == F2FS_WB_CP_DATA)
 				f2fs_stop_checkpoint(sbi, true);
 		}

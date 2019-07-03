@@ -219,7 +219,6 @@ static void diagfwd_data_read_done(struct diagfwd_info *fwd_info,
 	int write_len = 0;
 	unsigned char *write_buf = NULL;
 	struct diagfwd_buf_t *temp_buf = NULL;
-	struct diag_md_session_t *session_info = NULL;
 	uint8_t hdlc_disabled = 0;
 	if (!fwd_info || !buf || len <= 0) {
 		diag_ws_release();
@@ -240,13 +239,8 @@ static void diagfwd_data_read_done(struct diagfwd_info *fwd_info,
 
 	mutex_lock(&driver->hdlc_disable_mutex);
 	mutex_lock(&fwd_info->data_mutex);
-	mutex_lock(&driver->md_session_lock);
-	session_info = diag_md_session_get_peripheral(fwd_info->peripheral);
-	if (session_info)
-		hdlc_disabled = session_info->hdlc_disabled;
-	else
-		hdlc_disabled = driver->hdlc_disabled;
-	mutex_unlock(&driver->md_session_lock);
+
+	hdlc_disabled = driver->p_hdlc_disabled[fwd_info->peripheral];
 	if (!driver->feature[fwd_info->peripheral].encode_hdlc) {
 		if (fwd_info->buf_1 && fwd_info->buf_1->data == buf) {
 			temp_buf = fwd_info->buf_1;
@@ -328,6 +322,10 @@ end:
 end_write:
 	diag_ws_release();
 	if (temp_buf) {
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+		"Marking buffer as free p: %d, t: %d, buf_num: %d\n",
+			fwd_info->peripheral, fwd_info->type,
+			GET_BUF_NUM(temp_buf->ctxt));
 		diagfwd_write_done(fwd_info->peripheral, fwd_info->type,
 				   GET_BUF_NUM(temp_buf->ctxt));
 	}
@@ -351,7 +349,9 @@ static void diagfwd_cntl_read_done(struct diagfwd_info *fwd_info,
 	}
 
 	diag_ws_on_read(DIAG_WS_MUX, len);
+	DIAG_LOG(DIAG_DEBUG_PERIPHERALS, "Started processing control data\n");
 	diag_cntl_process_read_data(fwd_info, buf, len);
+	DIAG_LOG(DIAG_DEBUG_PERIPHERALS, "completed processing control data\n");	
 	/*
 	 * Control packets are not consumed by the clients. Mimic
 	 * consumption by setting and clearing the wakeup source copy_count
@@ -359,8 +359,12 @@ static void diagfwd_cntl_read_done(struct diagfwd_info *fwd_info,
 	 */
 	diag_ws_on_copy_fail(DIAG_WS_MUX);
 	/* Reset the buffer in_busy value after processing the data */
-	if (fwd_info->buf_1)
+	if (fwd_info->buf_1) {
 		atomic_set(&fwd_info->buf_1->in_busy, 0);
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"Buffer 1 for core PD is marked free, p: %d, t: %d\n",
+				fwd_info->peripheral, fwd_info->type);
+	}
 
 	diagfwd_queue_read(fwd_info);
 	diagfwd_queue_read(&peripheral_info[TYPE_DATA][fwd_info->peripheral]);
@@ -385,8 +389,12 @@ static void diagfwd_dci_read_done(struct diagfwd_info *fwd_info,
 
 	diag_dci_process_peripheral_data(fwd_info, (void *)buf, len);
 	/* Reset the buffer in_busy value after processing the data */
-	if (fwd_info->buf_1)
+	if (fwd_info->buf_1) {
 		atomic_set(&fwd_info->buf_1->in_busy, 0);
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"Buffer 1 for core PD is marked free, p: %d, t: %d\n",
+			fwd_info->peripheral, fwd_info->type);
+	}
 
 	diagfwd_queue_read(fwd_info);
 }
@@ -407,6 +415,16 @@ static void diagfwd_reset_buffers(struct diagfwd_info *fwd_info,
 			atomic_set(&fwd_info->buf_1->in_busy, 0);
 		else if (fwd_info->buf_2 && fwd_info->buf_2->data_raw == buf)
 			atomic_set(&fwd_info->buf_2->in_busy, 0);
+	}
+	if (fwd_info->buf_1 && !atomic_read(&(fwd_info->buf_1->in_busy))) {
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+		"Buffer 1 for core PD is marked free, p: %d, t: %d\n",
+			fwd_info->peripheral, fwd_info->type);
+	}
+	if (fwd_info->buf_2 && !atomic_read(&(fwd_info->buf_2->in_busy))) {
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+		"Buffer 2 for core PD is marked free, p: %d, t: %d\n",
+			fwd_info->peripheral, fwd_info->type);
 	}
 }
 
@@ -647,6 +665,7 @@ void diagfwd_close_transport(uint8_t transport, uint8_t peripheral)
 		break;
 	default:
 		return;
+
 	}
 
 	mutex_lock(&driver->diagfwd_channel_mutex[peripheral]);
@@ -730,11 +749,26 @@ static void __diag_fwd_open(struct diagfwd_info *fwd_info)
 	if (!fwd_info->inited)
 		return;
 
-	if (driver->logging_mode != DIAG_USB_MODE) {
-		if (fwd_info->buf_1)
-			atomic_set(&fwd_info->buf_1->in_busy, 0);
-		if (fwd_info->buf_2)
+	/*
+	 * Logging mode here is reflecting previous mode
+	 * status and will be updated to new mode later.
+	 *
+	 * Keeping the buffers busy for Memory Device Mode.
+	 */
+
+	if ((driver->logging_mode != DIAG_USB_MODE) ||
+		driver->usb_connected) {
+		if (fwd_info->buf_1) {
+			DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"Buffer 1 for core PD is marked free, p: %d, t: %d\n",
+				fwd_info->peripheral, fwd_info->type);
+		}
+		if (fwd_info->buf_2) {
 			atomic_set(&fwd_info->buf_2->in_busy, 0);
+			DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"Buffer 2 for core PD is marked free, p: %d, t: %d\n",
+				fwd_info->peripheral, fwd_info->type);
+		}
 	}
 
 	if (fwd_info->p_ops && fwd_info->p_ops->open)
@@ -865,6 +899,9 @@ int diagfwd_channel_read_done(struct diagfwd_info *fwd_info,
 	 * in_busy flags. No need to queue read in this case.
 	 */
 	if (len == 0) {
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+		"Read Length is 0, resetting the diag buffers p: %d, t: %d\n",
+			fwd_info->peripheral, fwd_info->type);
 		diagfwd_reset_buffers(fwd_info, buf);
 		diag_ws_release();
 		return 0;
@@ -885,12 +922,19 @@ void diagfwd_write_done(uint8_t peripheral, uint8_t type, int ctxt)
 		return;
 
 	fwd_info = &peripheral_info[type][peripheral];
-	if (ctxt == 1 && fwd_info->buf_1)
+	if (ctxt == 1 && fwd_info->buf_1) {
 		atomic_set(&fwd_info->buf_1->in_busy, 0);
-	else if (ctxt == 2 && fwd_info->buf_2)
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"Buffer 1 for core PD is marked free, p: %d, t: %d\n",
+			fwd_info->peripheral, fwd_info->type);
+	} else if (ctxt == 2 && fwd_info->buf_2) {
 		atomic_set(&fwd_info->buf_2->in_busy, 0);
-	else
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"Buffer 2 for core PD is marked free, p: %d, t: %d\n",
+				fwd_info->peripheral, fwd_info->type);
+	} else {
 		pr_err("diag: In %s, invalid ctxt %d\n", __func__, ctxt);
+	}
 
 	diagfwd_queue_read(fwd_info);
 }
@@ -903,12 +947,13 @@ void diagfwd_channel_read(struct diagfwd_info *fwd_info)
 	struct diagfwd_buf_t *temp_buf = NULL;
 
 	if (!fwd_info) {
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,"diag: In %s:%d,!fwd_info\n", __func__, __LINE__);
 		diag_ws_release();
 		return;
 	}
 
 	if (!fwd_info->inited || !atomic_read(&fwd_info->opened)) {
-		pr_debug("diag: In %s, p: %d, t: %d, inited: %d, opened: %d  ch_open: %d\n",
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS, "diag: In %s, p: %d, t: %d, inited: %d, opened: %d  ch_open: %d\n",
 			 __func__, fwd_info->peripheral, fwd_info->type,
 			 fwd_info->inited, atomic_read(&fwd_info->opened),
 			 fwd_info->ch_open);
@@ -945,17 +990,20 @@ void diagfwd_channel_read(struct diagfwd_info *fwd_info)
 			atomic_set(&temp_buf->in_busy, 1);
 		}
 	} else {
-		pr_debug("diag: In %s, both buffers are empty for p: %d, t: %d\n",
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,"diag: In %s, both buffers are busy for p: %d, t: %d\n",
 			 __func__, fwd_info->peripheral, fwd_info->type);
 	}
 
 	if (!read_buf) {
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,"diag: In %s:%d,!read_buf\n", __func__, __LINE__);
 		diag_ws_release();
 		return;
 	}
 
-	if (!(fwd_info->p_ops && fwd_info->p_ops->read && fwd_info->ctxt))
+	if (!(fwd_info->p_ops && fwd_info->p_ops->read && fwd_info->ctxt)) {
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,"diag: In %s:%d, !p_ops\n", __func__, __LINE__);
 		goto fail_return;
+	}
 
 	DIAG_LOG(DIAG_DEBUG_PERIPHERALS, "issued a read p: %d t: %d buf: %pK\n",
 		 fwd_info->peripheral, fwd_info->type, read_buf);
@@ -977,7 +1025,7 @@ static void diagfwd_queue_read(struct diagfwd_info *fwd_info)
 		return;
 
 	if (!fwd_info->inited || !atomic_read(&fwd_info->opened)) {
-		pr_debug("diag: In %s, p: %d, t: %d, inited: %d, opened: %d  ch_open: %d\n",
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,"diag: In %s, p: %d, t: %d, inited: %d, opened: %d  ch_open: %d\n",
 			 __func__, fwd_info->peripheral, fwd_info->type,
 			 fwd_info->inited, atomic_read(&fwd_info->opened),
 			 fwd_info->ch_open);
@@ -989,8 +1037,12 @@ static void diagfwd_queue_read(struct diagfwd_info *fwd_info)
 	 * the feature mask from the peripheral. We won't know which buffer to
 	 * use - HDLC or non HDLC buffer for reading.
 	 */
+	DIAG_LOG(DIAG_DEBUG_PERIPHERALS,"%s:%d: p:%d, t:%d\n", __func__, __LINE__, fwd_info->peripheral, fwd_info->type);	 
 	if ((!driver->feature[fwd_info->peripheral].rcvd_feature_mask) &&
 	    (fwd_info->type != TYPE_CNTL)) {
+	    DIAG_LOG(DIAG_DEBUG_PERIPHERALS,"%s:%d:rcvd feature mask: %d, p:%d, t:%d\n",__func__, __LINE__,
+			driver->feature[fwd_info->peripheral].rcvd_feature_mask,
+			fwd_info->peripheral, fwd_info->type);	
 		return;
 	}
 

@@ -1119,6 +1119,9 @@ static void clone_init(struct dm_crypt_io *io, struct bio *clone)
 	clone->bi_end_io  = crypt_endio;
 	clone->bi_bdev    = cc->dev->bdev;
 	clone->bi_rw      = io->base_bio->bi_rw;
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	clone->bi_flags   |= io->base_bio->bi_flags & BIO_JOURNAL_TAG_MASK;
+#endif
 }
 
 static int kcryptd_io_read(struct dm_crypt_io *io, gfp_t gfp)

@@ -1916,6 +1916,11 @@ int msm_isp_update_axi_stream(struct vfe_device *vfe_dev, void *arg)
 			stream_info->output_format = update_info->output_format;
 			if (stream_info->state == ACTIVE) {
 				stream_info->state = PAUSE_PENDING;
+				trace_printk("%s:%d state %d src %d stream id %d\n",
+					__func__, __LINE__,
+					stream_info->state
+					stream_info->stream_src,
+					stream_info->stream_id);
 				msm_isp_axi_stream_enable_cfg(
 					vfe_dev, stream_info);
 				stream_info->state = PAUSING;

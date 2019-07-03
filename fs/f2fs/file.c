@@ -1615,7 +1615,7 @@ static int f2fs_ioc_getflags(struct file *filp, unsigned long arg)
 	if (f2fs_has_inline_data(inode) || f2fs_has_inline_dentry(inode))
 		flags |= F2FS_INLINE_DATA_FL;
 
-	flags &= F2FS_FL_USER_VISIBLE;
+	flags &= (F2FS_FL_USER_VISIBLE | F2FS_CORE_FILE_FL);
 
 	return put_user(flags, (int __user *)arg);
 }
@@ -1657,8 +1657,8 @@ static int f2fs_ioc_setflags(struct file *filp, unsigned long arg)
 		}
 	}
 
-	flags = flags & (F2FS_FL_USER_MODIFIABLE);
-	flags |= oldflags & ~(F2FS_FL_USER_MODIFIABLE);
+	flags = flags & (F2FS_FL_USER_MODIFIABLE | F2FS_CORE_FILE_FL);
+	flags |= oldflags & ~(F2FS_FL_USER_MODIFIABLE | F2FS_CORE_FILE_FL);
 	fi->i_flags = flags;
 
 	inode->i_ctime = current_time(inode);

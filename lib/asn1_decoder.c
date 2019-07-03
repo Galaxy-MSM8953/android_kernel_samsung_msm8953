@@ -278,7 +278,7 @@ next_op:
 			}
 		} else {
 			if (unlikely(len > datalen - dp))
-				goto data_overrun_error;
+				goto data_overrun_error;			
 		}
 
 		if (flags & FLAG_CONS) {
@@ -319,7 +319,7 @@ next_op:
 		if (!(flags & FLAG_CONS)) {
 			if (flags & FLAG_INDEFINITE_LENGTH) {
 				size_t tmp = dp;
-
+				
 				ret = asn1_find_indefinite_length(
 					data, datalen, &tmp, &len, &errmsg);
 				if (ret < 0)
@@ -341,7 +341,7 @@ next_op:
 		}
 
 		if (!(flags & FLAG_CONS))
-			dp += len;
+			dp += len;		
 		pc += asn1_op_lengths[op];
 		goto next_op;
 

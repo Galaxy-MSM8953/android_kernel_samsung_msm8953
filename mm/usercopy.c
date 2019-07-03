@@ -209,7 +209,7 @@ static inline const char *check_heap_object(const void *ptr, unsigned long n,
 	 * vmalloced addresses. Work around this by checking for vmalloc
 	 * first.
 	 */
-	if (is_vmalloc_addr(ptr))
+	if (is_vmalloc_or_module_addr(ptr))
 		return NULL;
 
 	if (!virt_addr_valid(ptr))

@@ -730,7 +730,7 @@ static ssize_t driver_override_store(struct device *dev,
 	char *driver_override, *old, *cp;
 
 	/* We need to keep extra room for a newline */
-	if (count >= (PAGE_SIZE - 1))
+    if (count >= (PAGE_SIZE - 1))
 		return -EINVAL;
 
 	driver_override = kstrndup(buf, count, GFP_KERNEL);

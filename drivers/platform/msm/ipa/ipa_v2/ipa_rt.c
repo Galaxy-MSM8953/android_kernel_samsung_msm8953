@@ -1204,6 +1204,7 @@ int __ipa_del_rt_rule(u32 rule_hdl)
 			return -EINVAL;
 		}
 	}
+
 	/* Adding check to confirm still
 	 * header entry present in header table or not
 	 */
@@ -1418,6 +1419,7 @@ int ipa2_reset_rt(enum ipa_ip_type ip, bool user_only)
 						return -EINVAL;
 					}
 				}
+				
 				tbl->rule_cnt--;
 				if (rule->hdr)
 					__ipa_release_hdr(rule->hdr->id);

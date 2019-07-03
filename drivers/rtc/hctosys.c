@@ -44,6 +44,19 @@ static int __init rtc_hctosys(void)
 		goto err_read;
 
 	}
+#if defined(CONFIG_ARCH_SDM450)
+	/*
+	 * Force update rtc year time to 2018
+	 * (The release year of device)
+	 */
+	tm.tm_year = 118;
+#else
+	/*
+	 * Force update rtc year time to 2017
+	 * (The release year of device)
+	 */
+	tm.tm_year = 117;
+#endif
 
 	err = rtc_valid_tm(&tm);
 	if (err) {
@@ -53,16 +66,13 @@ static int __init rtc_hctosys(void)
 	}
 
 	rtc_tm_to_time(&tm, &tv.tv_sec);
-
 	err = do_settimeofday(&tv);
-
 	dev_info(rtc->dev.parent,
 		"setting system clock to "
 		"%d-%02d-%02d %02d:%02d:%02d UTC (%u)\n",
 		tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
 		tm.tm_hour, tm.tm_min, tm.tm_sec,
 		(unsigned int) tv.tv_sec);
-
 err_invalid:
 err_read:
 	rtc_class_close(rtc);

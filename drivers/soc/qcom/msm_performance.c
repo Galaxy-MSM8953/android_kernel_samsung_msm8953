@@ -260,7 +260,7 @@ static int get_max_cpus(char *buf, const struct kernel_param *kp)
 	int i, cnt = 0;
 
 	if (!clusters_inited)
-		return cnt;
+		return -EINVAL;
 
 	for (i = 0; i < num_clusters; i++)
 		cnt += snprintf(buf + cnt, PAGE_SIZE - cnt,

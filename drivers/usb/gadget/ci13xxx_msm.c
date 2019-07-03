@@ -40,8 +40,19 @@ static irqreturn_t msm_udc_irq(int irq, void *data)
 
 static void ci13xxx_msm_suspend(void)
 {
+#ifdef CONFIG_USB_CHARGING_EVENT
+	struct ci13xxx *udc = _udc;
+#endif
 	struct device *dev = _udc->gadget.dev.parent;
 	dev_dbg(dev, "ci13xxx_msm_suspend\n");
+
+#ifdef CONFIG_USB_CHARGING_EVENT
+	if (udc) {
+		udc->vbus_current = USB_CURRENT_UNCONFIGURED;
+		schedule_work(&udc->set_vbus_current_work);
+		pr_info("usb: %s vbus_current = %d\n", __func__, udc->vbus_current);
+	}
+#endif
 
 	if (_udc_ctxt.wake_irq && !_udc_ctxt.wake_irq_state) {
 		enable_irq_wake(_udc_ctxt.wake_irq);
@@ -175,6 +186,14 @@ static void ci13xxx_msm_reset(void)
 		 */
 		mb();
 	}
+#ifdef CONFIG_USB_CHARGING_EVENT
+	if (udc) {
+		udc->vbus_current = USB_CURRENT_UNCONFIGURED;
+		schedule_work(&udc->set_vbus_current_work);
+		pr_info("usb: %s vbus_current = %d\n", __func__, udc->vbus_current);
+	}
+#endif
+
 }
 
 static void ci13xxx_msm_mark_err_event(void)
@@ -351,6 +370,37 @@ static void ci13xxx_msm_uninstall_wake_gpio(struct platform_device *pdev)
 	}
 }
 
+#ifdef CONFIG_USB_CHARGING_EVENT
+/* for BC1.2 spec */
+int ci13xxx_set_vbus_current(int state)
+{
+	struct power_supply *psy;
+	union power_supply_propval pval = {0};
+
+	psy = get_power_supply_by_name("battery");
+
+	if(!psy) {
+		pr_err("%s: fail to get battery power_supply\n", __func__);
+		return -1;
+	}
+
+	pval.intval = state;
+#if defined(CONFIG_BATTERY_SAMSUNG_V2) || defined(CONFIG_BATTERY_SAMSUNG_V2_LEGACY)
+	psy->set_property(psy, POWER_SUPPLY_EXT_PROP_USB_CONFIGURE, &pval);
+#else
+	psy->set_property(psy, POWER_SUPPLY_PROP_USB_CONFIGURE, &pval);
+#endif
+
+	return 0;
+}
+
+static void ci13xxx_msm_set_vbus_current_work(struct work_struct *w)
+{
+	struct ci13xxx *udc = _udc;
+	ci13xxx_set_vbus_current(udc->vbus_current);
+}
+#endif
+
 static void enable_usb_irq_timer_func(unsigned long data);
 static int ci13xxx_msm_probe(struct platform_device *pdev)
 {
@@ -358,6 +408,9 @@ static int ci13xxx_msm_probe(struct platform_device *pdev)
 	int ret;
 	struct ci13xxx_platform_data *pdata = pdev->dev.platform_data;
 	bool is_l1_supported = false;
+#ifdef CONFIG_USB_CHARGING_EVENT
+	struct ci13xxx *udc;
+#endif
 
 	dev_dbg(&pdev->dev, "ci13xxx_msm_probe\n");
 
@@ -399,6 +452,12 @@ static int ci13xxx_msm_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "udc_probe failed\n");
 		goto iounmap;
 	}
+
+#ifdef CONFIG_USB_CHARGING_EVENT
+	udc = _udc;
+	if (udc)
+		INIT_WORK(&udc->set_vbus_current_work, ci13xxx_msm_set_vbus_current_work);
+#endif
 
 	_udc->gadget.l1_supported = is_l1_supported;
 

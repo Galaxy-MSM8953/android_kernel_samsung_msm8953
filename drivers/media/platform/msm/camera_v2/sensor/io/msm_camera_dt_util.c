@@ -23,7 +23,7 @@
 	(config_val >= min) && (config_val <= max))
 
 #undef CDBG
-#define CDBG(fmt, args...) pr_debug(fmt, ##args)
+#define CDBG(fmt, args...) pr_err(fmt, ##args)
 
 int msm_camera_fill_vreg_params(struct camera_vreg_t *cam_vreg,
 	int num_vreg, struct msm_sensor_power_setting *power_setting,
@@ -674,6 +674,10 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 	memcpy(power_info->power_down_setting,
 		ps, sizeof(*ps) * size);
 
+	for (i = 0; i < count; i++) {
+		power_info->power_down_setting[i].config_val = GPIO_OUT_LOW;
+	}
+
 	power_info->power_down_setting_size = size;
 
 	if (need_reverse) {
@@ -789,11 +793,8 @@ int msm_camera_get_dt_gpio_set_tbl(struct device_node *of_node,
 	uint32_t count = 0;
 	uint32_t *val_array = NULL;
 
-	rc = of_property_read_u32(of_node, "qcom,gpio-set-tbl-num", &count);
-	if (rc < 0) {
-		pr_err("%s failed %d\n", __func__, __LINE__);
+	if (!of_get_property(of_node, "qcom,gpio-set-tbl-num", &count))
 		return 0;
-	}
 
 	count /= sizeof(uint32_t);
 	if (!count) {
@@ -1183,6 +1184,244 @@ ERROR:
 	gconf->gpio_num_info = NULL;
 	return rc;
 }
+
+#if defined (CONFIG_CAMERA_SYSFS_V2)
+int msm_camera_get_dt_camera_info(struct device_node *of_node, char *buf)
+{
+	int rc = 0, val = 0;
+	char camera_info[110] = {0, };
+
+	rc = of_property_read_u32(of_node, "cam,isp",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcpy(camera_info, "ISP=");
+	switch (val) {
+	case CAM_INFO_ISP_TYPE_INTERNAL:
+		strcat(camera_info, "INT;");
+		break;
+	case CAM_INFO_ISP_TYPE_EXTERNAL:
+		strcat(camera_info, "EXT;");
+		break;
+	case CAM_INFO_ISP_TYPE_SOC:
+		strcat(camera_info, "SOC;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,cal_memory",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "CALMEM=");
+	switch (val) {
+	case CAM_INFO_CAL_MEM_TYPE_NONE:
+		strcat(camera_info, "N;");
+		break;
+	case CAM_INFO_CAL_MEM_TYPE_FROM:
+	case CAM_INFO_CAL_MEM_TYPE_EEPROM:
+	case CAM_INFO_CAL_MEM_TYPE_OTP:
+		strcat(camera_info, "Y;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,read_version",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "READVER=");
+	switch (val) {
+	case CAM_INFO_READ_VER_SYSFS:
+		strcat(camera_info, "SYSFS;");
+		break;
+	case CAM_INFO_READ_VER_CAMON:
+		strcat(camera_info, "CAMON;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,core_voltage",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "COREVOLT=");
+	switch (val) {
+	case CAM_INFO_CORE_VOLT_NONE:
+		strcat(camera_info, "N;");
+		break;
+	case CAM_INFO_CORE_VOLT_USE:
+		strcat(camera_info, "Y;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,upgrade",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "UPGRADE=");
+	switch (val) {
+	case CAM_INFO_FW_UPGRADE_NONE:
+		strcat(camera_info, "N;");
+		break;
+	case CAM_INFO_FW_UPGRADE_SYSFS:
+		strcat(camera_info, "SYSFS;");
+		break;
+	case CAM_INFO_FW_UPGRADE_CAMON:
+		strcat(camera_info, "CAMON;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,fw_write",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "FWWRITE=");
+	switch (val) {
+	case CAM_INFO_FW_WRITE_NONE:
+		strcat(camera_info, "N;");
+		break;
+	case CAM_INFO_FW_WRITE_OS:
+		strcat(camera_info, "OS;");
+		break;
+	case CAM_INFO_FW_WRITE_SD:
+		strcat(camera_info, "SD;");
+		break;
+	case CAM_INFO_FW_WRITE_ALL:
+		strcat(camera_info, "ALL;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,fw_dump",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "FWDUMP=");
+	switch (val) {
+	case CAM_INFO_FW_DUMP_NONE:
+		strcat(camera_info, "N;");
+		break;
+	case CAM_INFO_FW_DUMP_USE:
+		strcat(camera_info, "Y;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,companion_chip",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "CC=");
+	switch (val) {
+	case CAM_INFO_COMPANION_NONE:
+		strcat(camera_info, "N;");
+		break;
+	case CAM_INFO_COMPANION_USE:
+		strcat(camera_info, "Y;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,ois",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "OIS=");
+	switch (val) {
+	case CAM_INFO_OIS_NONE:
+		strcat(camera_info, "N;");
+		break;
+	case CAM_INFO_OIS_USE:
+		strcat(camera_info, "Y;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+    rc = of_property_read_u32(of_node, "cam,valid",
+			&val);
+	if (rc < 0) {
+		pr_err("%s failed %d\n", __func__, __LINE__);
+		goto ERROR1;
+	}
+	strcat(camera_info, "VALID=");
+	switch (val) {
+	case CAM_INFO_INVALID:
+		strcat(camera_info, "N;");
+		break;
+	case CAM_INFO_VALID:
+		strcat(camera_info, "Y;");
+		break;
+	default:
+		strcat(camera_info, "NULL;");
+		break;
+	}
+
+	rc = of_property_read_u32(of_node, "cam,dual_open", &val);
+	if (rc < 0) {
+		pr_err("%s dual open not used %d\n", __func__, __LINE__);
+	} else {
+		strcat(camera_info, "DUALOPEN=");
+		switch (val) {
+		case CAM_INFO_DUALOPEN_NONE:
+			strcat(camera_info, "N;");
+			break;
+		case CAM_INFO_DUALOPEN_USE:
+			strcat(camera_info, "Y;");
+			break;
+		default:
+			strcat(camera_info, "NULL;");
+			break;
+		}
+	}
+
+	snprintf(buf, sizeof(camera_info), "%s", camera_info);
+	return 0;
+
+ERROR1:
+	strcpy(camera_info, "ISP=NULL;CALMEM=NULL;READVER=NULL;COREVOLT=NULL;UPGRADE=NULL;FW_CC=NULL;OIS=NULL");
+	snprintf(buf, sizeof(camera_info), "%s", camera_info);
+	return 0;
+}
+#endif
 
 int msm_camera_get_dt_vreg_data(struct device_node *of_node,
 	struct camera_vreg_t **cam_vreg, int *num_vreg)
@@ -1606,7 +1845,7 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 				pr_err("%s: %d usr_idx:%d dts_idx:%d\n",
 					__func__, __LINE__,
 					power_setting->seq_val, ctrl->num_vreg);
-
+#if 0//TEMP_8996_N
 			rc = msm_cam_sensor_handle_reg_gpio(
 				power_setting->seq_val,
 				ctrl->gpio_conf, 1);
@@ -1615,6 +1854,7 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 					__func__);
 				goto power_up_failed;
 			}
+#endif
 			break;
 		case SENSOR_I2C_MUX:
 			if (ctrl->i2c_conf && ctrl->i2c_conf->use_i2c_mux)
@@ -1672,9 +1912,10 @@ power_up_failed:
 				pr_err("%s:%d:seq_val: %d > num_vreg: %d\n",
 					__func__, __LINE__,
 					power_setting->seq_val, ctrl->num_vreg);
-
+#if 0 //TEMP_8996_N
 			msm_cam_sensor_handle_reg_gpio(power_setting->seq_val,
 				ctrl->gpio_conf, GPIOF_OUT_INIT_LOW);
+#endif
 			break;
 		case SENSOR_I2C_MUX:
 			if (ctrl->i2c_conf && ctrl->i2c_conf->use_i2c_mux)
@@ -1800,11 +2041,13 @@ int msm_camera_power_down(struct msm_camera_power_ctrl_t *ctrl,
 			} else
 				pr_err("%s error in power up/down seq data\n",
 								__func__);
+#if 0//TEMP_8996_N
 			ret = msm_cam_sensor_handle_reg_gpio(pd->seq_val,
 				ctrl->gpio_conf, GPIOF_OUT_INIT_LOW);
 			if (ret < 0)
 				pr_err("ERR:%s Error while disabling VREG GPIO\n",
 					__func__);
+#endif
 			break;
 		case SENSOR_I2C_MUX:
 			if (ctrl->i2c_conf && ctrl->i2c_conf->use_i2c_mux)
