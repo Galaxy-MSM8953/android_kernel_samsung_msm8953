@@ -33,6 +33,8 @@ enum {
 	Opt_userid,
 	Opt_reserved_mb,
 	Opt_default_normal,
+	Opt_nocache,
+	Opt_unshared_obb,
 	Opt_err,
 };
 
@@ -45,7 +47,9 @@ static const match_table_t sdcardfs_tokens = {
 	{Opt_userid, "userid=%d"},
 	{Opt_multiuser, "multiuser"},
 	{Opt_default_normal, "default_normal"},
+	{Opt_unshared_obb, "unshared_obb"},
 	{Opt_reserved_mb, "reserved_mb=%u"},
+	{Opt_nocache, "nocache"},
 	{Opt_err, NULL}
 };
 
@@ -67,6 +71,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	/* by default, 0MB is reserved */
 	opts->reserved_mb = 0;
 	opts->default_normal = false;
+	opts->nocache = false;
 
 	*debug = 0;
 
@@ -121,6 +126,12 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 		case Opt_default_normal:
 			opts->default_normal = true;
 			break;
+		case Opt_nocache:
+			opts->nocache = true;
+			break;
+		case Opt_unshared_obb:
+			opts->unshared_obb = true;
+			break;
 		/* unknown option */
 		default:
 			if (!silent)
@@ -174,13 +185,16 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 				return 0;
 			vfsopts->mask = option;
 			break;
+		case Opt_unshared_obb:
 		case Opt_default_normal:
 		case Opt_multiuser:
 		case Opt_userid:
 		case Opt_fsuid:
 		case Opt_fsgid:
 		case Opt_reserved_mb:
-			pr_warn("Option \"%s\" can't be changed during remount\n", p);
+		case Opt_gid_derivation:
+			if (!silent)
+				pr_warn("Option \"%s\" can't be changed during remount\n", p);
 			break;
 		/* unknown option */
 		default:

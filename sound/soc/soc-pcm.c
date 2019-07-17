@@ -742,7 +742,7 @@ static int soc_pcm_prepare(struct snd_pcm_substream *substream)
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_platform *platform = rtd->platform;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-	struct snd_soc_dai *codec_dai;
+	struct snd_soc_dai *codec_dai = NULL;
 	int i, ret = 0;
 
 	mutex_lock_nested(&rtd->pcm_mutex, rtd->pcm_subclass);
@@ -781,6 +781,12 @@ static int soc_pcm_prepare(struct snd_pcm_substream *substream)
 				goto out;
 			}
 		}
+	}
+
+	if (!codec_dai) {
+		dev_err(codec_dai->dev, "ASoC: DAI not found\n");
+		ret = -EINVAL;
+		goto out;
 	}
 
 	if (cpu_dai->driver->ops && cpu_dai->driver->ops->prepare) {
@@ -907,10 +913,13 @@ static int soc_pcm_hw_params(struct snd_pcm_substream *substream,
 		codec_params = *params;
 
 		/* fixup params based on TDM slot masks */
-		if (codec_dai->tx_mask)
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK &&
+		    codec_dai->tx_mask)
 			soc_pcm_codec_params_fixup(&codec_params,
 						   codec_dai->tx_mask);
-		if (codec_dai->rx_mask)
+
+		if (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
+		    codec_dai->rx_mask)
 			soc_pcm_codec_params_fixup(&codec_params,
 						   codec_dai->rx_mask);
 
