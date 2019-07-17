@@ -192,9 +192,7 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 		case Opt_fsuid:
 		case Opt_fsgid:
 		case Opt_reserved_mb:
-		case Opt_gid_derivation:
-			if (!silent)
-				pr_warn("Option \"%s\" can't be changed during remount\n", p);
+ 			pr_warn("Option \"%s\" can't be changed during remount\n", p);
 			break;
 		/* unknown option */
 		default:

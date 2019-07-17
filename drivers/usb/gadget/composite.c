@@ -136,8 +136,6 @@ int config_ep_by_speed(struct usb_gadget *g,
 	if (!g || !f || !_ep)
 		return -EIO;
 
-	cdev = (struct usb_composite_dev *)get_gadget_data(g);
-
 	/* select desired speed */
 	switch (g->speed) {
 	case USB_SPEED_SUPER:

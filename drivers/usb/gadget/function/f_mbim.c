@@ -1912,14 +1912,7 @@ mbim_write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 	ret = mbim_do_notify(dev);
 	spin_unlock_irqrestore(&dev->lock, flags);
 
-<<<<<<< HEAD
-	ret = usb_func_ep_queue(&dev->function, dev->not_port.notify,
-			   req, GFP_ATOMIC);
-	if (ret == -ENOTSUPP || (ret < 0 && ret != -EAGAIN)) {
-		pr_err("drop ctrl pkt of len %d error %d\n", cpkt->len, ret);
-=======
 	if (ret < 0 && ret != -EAGAIN && ret != -EBUSY) {
->>>>>>> qcomcom/lineage-16.0
 		spin_lock_irqsave(&dev->lock, flags);
 		/*
 		 * cpkt already freed if device disconnected while we

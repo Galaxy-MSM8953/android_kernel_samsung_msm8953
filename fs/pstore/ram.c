@@ -600,28 +600,22 @@ static int ramoops_probe(struct platform_device *pdev)
 	phys_addr_t paddr;
 	int err = -EINVAL;
 
-	if (dev->of_node && !pdata) {
+	if (pdev->dev.of_node)
+		ramoops_of_init(pdev);
+
+	if (dev->of_node && !dev->platform_data) {
 		pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
 		if (!pdata) {
 			err = -ENOMEM;
 			goto fail_out;
 		}
 
+		dev_set_drvdata(dev, pdata);
+
 		err = ramoops_parse_dt(pdev, pdata);
 		if (err < 0)
 			goto fail_out;
 	}
-
-	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
-	if (!pdata) {
-		pr_err("could not allocate ramoops_platform_data\n");
-		return -ENOMEM;
-	}
-
-	dev_set_drvdata(dev, pdata);
-
-	if (pdev->dev.of_node)
-		ramoops_of_init(pdev);
 
 	/* Only a single ramoops area allowed at a time, so fail extra
 	 * probes.
@@ -766,7 +760,11 @@ static struct platform_driver ramoops_driver = {
 	.remove		= __exit_p(ramoops_remove),
 	.driver		= {
 		.name		= "ramoops",
+#ifdef CONFIG_OF
+		.of_match_table	= ramoops_of_match,
+#else
 		.of_match_table	= dt_match,
+#endif
 	},
 };
 
