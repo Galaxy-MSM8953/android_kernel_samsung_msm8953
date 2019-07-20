@@ -1992,7 +1992,11 @@ err_power_supply_register_chg:
 err_power_supply_register:
 	destroy_workqueue(charger->wqueue);
 #ifdef CONFIG_OF
+#if defined CONFIG_CHARGER_SM5705
+
+#else
 	kfree(pdata->charger_data);
+#endif
 #endif
 	mutex_destroy(&charger->charger_mutex);
 err_free:
