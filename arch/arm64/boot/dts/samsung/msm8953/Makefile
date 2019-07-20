@@ -24,6 +24,19 @@ dtb-$(CONFIG_SEC_C7LTE_CHN) += msm8953-sec-c7lte_chn-r00.dtb \
 				msm8953-sec-c7lte_chn-r03.dtb \
 				msm8953-sec-c7lte_chn-r04.dtb
 endif
+# For C7PROLTE_CHN
+ifeq ($(CONFIG_SEC_C7PROLTE_HK),y)
+dtb-$(CONFIG_SEC_C7PROLTE_HK) += msm8953-sec-c7prolte_hk-r00.dtb
+else ifeq ($(CONFIG_SEC_C7PROLTE_SWA),y)
+dtb-$(CONFIG_SEC_C7PROLTE_SWA) += msm8953-sec-c7prolte_swa-r00.dtb \
+				msm8953-sec-c7prolte_swa-r01.dtb
+else
+dtb-$(CONFIG_SEC_C7PROLTE_CHN) += msm8953-sec-c7prolte_chn-r00.dtb \
+				msm8953-sec-c7prolte_chn-r01.dtb \
+				msm8953-sec-c7prolte_chn-r02.dtb \
+				msm8953-sec-c7prolte_chn-r03.dtb \
+				msm8953-sec-c7prolte_chn-r04.dtb
+endif
 # For C7LTE_CHN_HK
 dtb-$(CONFIG_SEC_C7LTE_CHN_HK) += msm8953-sec-c7lte_chn_hk-r02.dtb \
 				msm8953-sec-c7lte_chn_hk-r03.dtb \
@@ -39,6 +52,14 @@ dtb-$(CONFIG_SEC_ON7XLTE_CHN) += msm8953-sec-on7xlte_chn-r00.dtb \
 				msm8953-sec-on7xlte_chn-r03.dtb \
 				msm8953-sec-on7xlte_chn-r04.dtb \
 				msm8953-sec-on7xlte_chn-r05.dtb
+
+# For C5PROLTE_CHN
+dtb-$(CONFIG_SEC_C5PROLTE_CHN) += msm8953-sec-c5prolte_chn-r00.dtb \
+				msm8953-sec-c5prolte_chn-r01.dtb \
+				msm8953-sec-c5prolte_chn-r02.dtb \
+				msm8953-sec-c5prolte_chn-r03.dtb \
+				msm8953-sec-c5prolte_chn-r04.dtb \
+				msm8953-sec-c5prolte_chn-r05.dtb
 				
 # For GTAXLQLTE_USA_SPR
 dtb-$(CONFIG_SEC_GTAXLQLTE_USA_SPR) += msm8953-sec-gtaxlqlte_usa_spr-r00.dtb \
