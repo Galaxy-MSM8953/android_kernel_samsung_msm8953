@@ -54,6 +54,13 @@ config MACH_A6PLTE_KOR_KTT
 	help
 	  Support for Samsung A6-Plus LTE KOR KTT device.
 
+config SEC_C7LTE_CHN
+	bool "Enable Support for Samsung C7 LTE CHN device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung C7 LTE CHN device.
+
 config SEC_GTAXLQLTE_USA_SPR
 	bool "Enable Support for Samsung GTAXLQ LTE USA SPR device."
 	depends on ARCH_MSM8953
