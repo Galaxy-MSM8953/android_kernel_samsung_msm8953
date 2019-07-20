@@ -24,7 +24,13 @@
 #define __SM5705_H__
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
-#include "../../../../drivers/battery_v2/include/sec_charging_common.h"
+#if defined(CONFIG_BATTERY_SAMSUNG_V2)
+#include "../../../drivers/battery_v2/include/sec_charging_common.h"
+#elif defined(CONFIG_BATTERY_SAMSUNG_V2_LEGACY)
+#include "../../../../drivers/battery_v2_legacy/include/sec_charging_common.h"
+#else
+#include <linux/battery/sec_charging_common.h>
+#endif
 #include <linux/leds-sm5705.h>
  
 #define MFD_DEV_NAME "sm5705"
