@@ -1149,5 +1149,7 @@ source "drivers/input/touchscreen/stm/fts7/Kconfig"
 source "drivers/input/touchscreen/stm/fts8/Kconfig"
 source "drivers/input/touchscreen/stm/fts1ba90a/Kconfig"
 source "drivers/input/touchscreen/zinitix/Kconfig"
+source "drivers/input/touchscreen/zinitix_pat/Kconfig"
 source "drivers/input/touchscreen/synaptics_incell/Kconfig"
+source "drivers/input/touchscreen/melfas/Kconfig"
 endif
