@@ -137,11 +137,28 @@ fw-shipped-$(CONFIG_VIDEO_CPIA2) += cpia2/stv0672_vp4.bin
 fw-shipped-$(CONFIG_YAM) += yam/1200.bin yam/9600.bin
 
 # Input Device
-fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS449)		+= tsp_melfas/mms449_c7.fw
+ifdef CONFIG_SEC_C7PROLTE_CHN
+fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS449)+= tsp_melfas/mms449_c7pro.fw
+fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_16XX) += abov/abov_tk_1604_c7pro.fw
+else
+ifdef CONFIG_SEC_C7PROLTE_SWA
+fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS449)+= tsp_melfas/mms449_c7pro.fw
+fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_16XX) += abov/abov_tk_1604_c7pro.fw
+else
+ifdef CONFIG_SEC_C7LTE_CHN
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS7) 		+= tsp_stm/stm_gtaxlqlte.fw
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS1BA90A) 	+= tsp_stm/fts1ba90a_gta2xl.fw
+fw-shipped-$(CONFIG_TOUCHSCREEN_MELFAS_MMS449)+= tsp_melfas/mms449_c7.fw
 fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_18XX) += abov/abov_tk_1804_c7.fw
 fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_16XX) += abov/abov_tk_1604_c7.fw
+else
+ifdef CONFIG_SEC_C5PROLTE_CHN
+fw-shipped-$(CONFIG_TOUCHSCREEN_ZINITIX_ZT75XX) += tsp_zinitix/zt7538_c5pro.fw
+fw-shipped-$(CONFIG_KEYBOARD_ABOV_TOUCH_16XX) += abov/abov_tk_1604_c5pro.fw
+endif
+endif
+endif
+endif
 ifdef CONFIG_SEC_ON7XLTE_CHN
 fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_INCELL) += tsp_synaptics/td4300_on7xlte.fw \
 						tsp_synaptics/td4300_on7xlte_recovery.fw
@@ -271,6 +288,9 @@ else
 fw-shipped-$(CONFIG_FIVE_TEE_DRIVER) += five.b00 five.b01 five.b02 five.b03 \
 				  five.b04 five.b05 five.b06 five.mdt
 endif
+
+#SensorHub
+fw-shipped-$(CONFIG_SENSORS_SSP_STM32f) += ssp_stmf410_cx.fw ssp_crashed.fw ssp_stmf410_cx_old.fw
 
 fw-shipped-all := $(fw-shipped-y) $(fw-shipped-m) $(fw-shipped-)
 
