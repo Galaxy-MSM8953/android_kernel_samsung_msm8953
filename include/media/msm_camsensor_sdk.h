@@ -1,7 +1,5 @@
-#ifndef __UAPI_LINUX_MSM_CAMSENSOR_SDK_H
-#define __UAPI_LINUX_MSM_CAMSENSOR_SDK_H
-
-#include <linux/videodev2.h>
+#ifndef __LINUX_MSM_CAMSENSOR_SDK_H
+#define __LINUX_MSM_CAMSENSOR_SDK_H
 
 #define KVERSION 0x1
 
@@ -18,7 +16,6 @@
 #define CSI_DECODE_8BIT         1
 #define CSI_DECODE_10BIT        2
 #define CSI_DECODE_12BIT        3
-#define CSI_DECODE_DPCM_10_6_10 4
 #define CSI_DECODE_DPCM_10_8_10 5
 #define MAX_CID                 16
 #define I2C_SEQ_REG_DATA_MAX    1024
@@ -48,8 +45,6 @@
 #define MSM_EEPROM_MEMORY_MAP_MAX_SIZE  80
 #define MSM_EEPROM_MAX_MEM_MAP_CNT      8
 
-#define MSM_SENSOR_BYPASS_VIDEO_NODE    1
-
 enum msm_sensor_camera_id_t {
 	CAMERA_0,
 	CAMERA_1,
@@ -71,6 +66,12 @@ enum camb_position_t {
 	FRONT_CAMERA_B,
 	AUX_CAMERA_B = 0x100,
 	INVALID_CAMERA_B,
+};
+
+enum flash_position_t {
+	BACK_FLASH,
+	FRONT_FLASH,
+	INVALID_FLASH,
 };
 
 enum msm_sensor_power_seq_type_t {
@@ -116,19 +117,14 @@ enum msm_sensor_power_seq_gpio_t {
 	SENSOR_GPIO_MAX,
 };
 
-enum msm_ir_cut_filter_gpio_t {
-	IR_CUT_FILTER_GPIO_P = 0,
-	IR_CUT_FILTER_GPIO_M,
-	IR_CUT_FILTER_GPIO_MAX,
-};
-#define IR_CUT_FILTER_GPIO_P IR_CUT_FILTER_GPIO_P
-#define IR_CUT_FILTER_GPIO_M IR_CUT_FILTER_GPIO_M
-#define R_CUT_FILTER_GPIO_MAX IR_CUT_FILTER_GPIO_MAX
-
 enum msm_camera_vreg_name_t {
 	CAM_VDIG,
+#if defined(CONFIG_SEC_C5PROLTE_CHN) || defined(CONFIG_SEC_C7PROLTE_CHN) || defined(CONFIG_SEC_C7PROLTE_SWA)
+	CAM_VT_VDIG,
+#endif
 	CAM_VIO,
 	CAM_VANA,
+	CAM_VT_VANA,
 	CAM_VAF,
 	CAM_V_CUSTOM1,
 	CAM_V_CUSTOM2,
@@ -176,12 +172,14 @@ enum actuator_type {
 	ACTUATOR_PIEZO,
 	ACTUATOR_HVCM,
 	ACTUATOR_BIVCM,
+	ACTUATOR_HALL_EFFECT,
 };
 
 enum msm_flash_driver_type {
 	FLASH_DRIVER_PMIC,
 	FLASH_DRIVER_I2C,
 	FLASH_DRIVER_GPIO,
+	FLASH_DRIVER_EXT_PMIC,
 	FLASH_DRIVER_DEFAULT
 };
 
@@ -191,29 +189,8 @@ enum msm_flash_cfg_type_t {
 	CFG_FLASH_OFF,
 	CFG_FLASH_LOW,
 	CFG_FLASH_HIGH,
+	CFG_FLASH_TORCH,
 };
-
-enum msm_ir_led_cfg_type_t {
-	CFG_IR_LED_INIT = 0,
-	CFG_IR_LED_RELEASE,
-	CFG_IR_LED_OFF,
-	CFG_IR_LED_ON,
-};
-#define CFG_IR_LED_INIT CFG_IR_LED_INIT
-#define CFG_IR_LED_RELEASE CFG_IR_LED_RELEASE
-#define CFG_IR_LED_OFF CFG_IR_LED_OFF
-#define CFG_IR_LED_ON CFG_IR_LED_ON
-
-enum msm_ir_cut_cfg_type_t {
-	CFG_IR_CUT_INIT = 0,
-	CFG_IR_CUT_RELEASE,
-	CFG_IR_CUT_OFF,
-	CFG_IR_CUT_ON,
-};
-#define CFG_IR_CUT_INIT CFG_IR_CUT_INIT
-#define CFG_IR_CUT_RELEASE CFG_IR_CUT_RELEASE
-#define CFG_IR_CUT_OFF CFG_IR_CUT_OFF
-#define CFG_IR_CUT_ON CFG_IR_CUT_ON
 
 enum msm_sensor_output_format_t {
 	MSM_SENSOR_BAYER,
@@ -302,7 +279,6 @@ struct msm_camera_sensor_slave_info {
 	unsigned char  is_init_params_valid;
 	struct msm_sensor_init_params sensor_init_params;
 	enum msm_sensor_output_format_t output_format;
-	uint8_t bypass_video_node_creation;
 };
 
 struct msm_camera_i2c_reg_array {
@@ -402,9 +378,9 @@ struct region_params_t {
 
 struct reg_settings_t {
 	unsigned short reg_addr;
-	enum msm_camera_i2c_reg_addr_type addr_type;
+	enum msm_actuator_addr_type addr_type;
 	unsigned short reg_data;
-	enum msm_camera_i2c_data_type data_type;
+	enum msm_actuator_data_type data_type;
 	enum msm_actuator_i2c_operation i2c_operation;
 	unsigned int delay;
 };
@@ -416,5 +392,4 @@ struct msm_camera_i2c_reg_setting_array {
 	enum msm_camera_i2c_data_type data_type;
 	unsigned short delay;
 };
-
-#endif
+#endif /* __LINUX_MSM_CAM_SENSOR_H */
