@@ -115,15 +115,18 @@ done:
 
 int etspi_Interrupt_Free(struct etspi_data *etspi)
 {
-	pr_info("%s\n", __func__);
-
 	if (etspi != NULL) {
 		if (etspi->drdy_irq_flag == DRDY_IRQ_ENABLE) {
 			free_irq(gpio_irq, etspi);
 			etspi->drdy_irq_flag = DRDY_IRQ_DISABLE;
+			pr_info("%s done\n", __func__);
+		} else {
+			pr_info("%s skipped\n", __func__);
 		}
 		etspi->finger_on = 0;
 		etspi->int_count = 0;
+	} else {
+		pr_info("%s etspi is NULL\n", __func__);
 	}
 	return 0;
 }

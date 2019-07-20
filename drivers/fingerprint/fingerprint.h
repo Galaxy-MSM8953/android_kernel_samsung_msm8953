@@ -38,4 +38,8 @@ enum {
 static char sensor_status[SENSOR_STATUS_SIZE][10] = {"ooo", "unknown",
 	"failed", "viper", "raptor", "egis", "viper_wog", "namsan", "cpid"};
 
+#ifdef CONFIG_SENSORS_FINGERPRINT_DUALIZATION
+extern int FP_CHECK; /* extern variable */
+#endif
+
 #endif

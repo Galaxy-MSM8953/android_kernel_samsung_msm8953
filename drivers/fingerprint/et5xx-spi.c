@@ -1296,6 +1296,9 @@ static int etspi_pm_resume(struct device *dev)
 	pr_info("%s\n", __func__);
 	if (g_data != NULL) {
 		etspi_enable_debug_timer();
+#ifndef ENABLE_SENSORS_FPRINT_SECURE
+		etspi_power_control(g_data, 1);
+#endif
 	}
 	return 0;
 }
