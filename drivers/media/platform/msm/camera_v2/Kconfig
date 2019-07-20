@@ -1,5 +1,5 @@
 config MSM_CAMERA_SENSOR
-	    bool "QTI MSM camera sensor support"
+	    bool "Qualcomm MSM camera sensor support"
 	    depends on MSMB_CAMERA
 	    select NEW_LEDS
 	    select LEDS_CLASS
@@ -9,48 +9,8 @@ config MSM_CAMERA_SENSOR
           data for camera support. The driver support V4L2
           subdev APIs.
 
-config MSM_FRONT_OTP
-        bool "Qualcomm MSM Camera ROM Interface for Calibration support"
-        depends on MSMB_CAMERA
-        ---help---
-          Enable support for ROM Interface for Calibration
-          Provides interface for reading the Claibration data.
-          and also provides support for writing data
-
-config MSM_OTP
-        bool "Qualcomm MSM Camera ROM Interface for Calibration support"
-        depends on MSMB_CAMERA
-        ---help---
-          Enable support for ROM Interface for Calibration
-          Provides interface for reading the Claibration data.
-          and also provides support for writing data
-
-config SR544
-    bool "Sensor for back camera"
-	depends on MSMB_CAMERA
-	default n
-	---help---
-	5MP sensor
-	Rear sensor
-
-config SR259
-    bool "Sensor for front camera"
-	depends on MSMB_CAMERA
-	default n
-	---help---
-	2MP sensor
-	Front sensor
-
-config S5K5E9YX
-        bool "Sensor for front camera"
-        depends on MSMB_CAMERA
-        default n
-        ---help---
-          5MP sensor
-          Front sensor
-
 config MSM_CPP
-        bool "QTI MSM Camera Post Processing Engine support"
+        bool "Qualcomm MSM Camera Post Processing Engine support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for Camera Post-processing Engine
@@ -59,7 +19,7 @@ config MSM_CPP
           APIs.
 
 config MSM_CCI
-        bool "QTI MSM Camera Control Interface support"
+        bool "Qualcomm MSM Camera Control Interface support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for Camera Control Interface driver only
@@ -69,7 +29,7 @@ config MSM_CCI
           GPIO and data frames.
 
 config MSM_CSI20_HEADER
-        bool "QTI MSM CSI 2.0 Header"
+        bool "Qualcomm MSM CSI 2.0 Header"
         depends on MSMB_CAMERA
         ---help---
           Enable support for CSI drivers to include 2.0
@@ -79,7 +39,7 @@ config MSM_CSI20_HEADER
           8930 and 8064 platforms.
 
 config MSM_CSI22_HEADER
-        bool "QTI MSM CSI 2.2 Header"
+        bool "Qualcomm MSM CSI 2.2 Header"
         depends on MSMB_CAMERA
         ---help---
           Enable support for CSI drivers to include 2.2
@@ -89,7 +49,7 @@ config MSM_CSI22_HEADER
           platform.
 
 config MSM_CSI30_HEADER
-        bool "QTI MSM CSI 3.0 Header"
+        bool "Qualcomm MSM CSI 3.0 Header"
         depends on MSMB_CAMERA
         ---help---
           Enable support for CSI drivers to include 3.0
@@ -99,7 +59,7 @@ config MSM_CSI30_HEADER
           8064 platforms.
 
 config MSM_CSI31_HEADER
-        bool "QTI MSM CSI 3.1 Header"
+        bool "Qualcomm MSM CSI 3.1 Header"
         depends on MSMB_CAMERA
         ---help---
           Enable support for CSI drivers to include 3.0
@@ -109,7 +69,7 @@ config MSM_CSI31_HEADER
           APQ8084 platform.
 
 config MSM_CSIPHY
-        bool "QTI MSM Camera Serial Interface Physical receiver support"
+        bool "Qualcomm MSM Camera Serial Interface Physical receiver support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for Camera Serial Interface
@@ -118,7 +78,7 @@ config MSM_CSIPHY
           signalling.
 
 config MSM_CSID
-        bool "QTI MSM Camera Serial Interface decoder support"
+        bool "Qualcomm MSM Camera Serial Interface decoder support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for Camera Serial Interface decoder.
@@ -127,7 +87,7 @@ config MSM_CSID
           and datatype.
 
 config MSM_EEPROM
-        bool "QTI MSM Camera ROM Interface for Calibration support"
+        bool "Qualcomm MSM Camera ROM Interface for Calibration support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for ROM Interface for Calibration
@@ -135,26 +95,21 @@ config MSM_EEPROM
           and also provides support for writing data in case of FLASH ROM.
 	  Currently supports I2C, CCI and SPI protocol
 
-config MSM_FRONT_EEPROM
+config MSM_FRONT_OTP
         bool "Qualcomm MSM Camera ROM Interface for Calibration support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for ROM Interface for Calibration
           Provides interface for reading the Claibration data.
-          and also provides support for writing data in case of FLASH ROM.
-          Currently supports I2C, CCI and SPI protocol
+          and also provides support for writing data
 
-config MSM_ISP_V1
-        bool "QTI MSM Image Signal Processing interface support"
-        depends on MSMB_CAMERA
+config MSM_FRONT_EEPROM
+        bool "Qualcomm MSM Front Camera ROM Interface for Calibration support"
         ---help---
-          Enable support for Image Signal Processing interface module.
-          This module acts as a crossbar between CSID and VFE. Output
-          of any CID of CSID can be routed to of of pixel or raw
-          data interface in VFE.
+          Enables reading of Front sensor calibration data from EEP.
 
 config MSM_ISPIF
-        bool "QTI MSM Image Signal Processing interface support"
+        bool "Qualcomm MSM Image Signal Processing interface support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for Image Signal Processing interface module.
@@ -163,7 +118,7 @@ config MSM_ISPIF
           data interface in VFE.
 
 config MSM_ISPIF_V1
-        bool "QTI MSM Image Signal Processing interface support"
+        bool "Qualcomm MSM Image Signal Processing interface support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for Image Signal Processing interface module.
@@ -172,7 +127,7 @@ config MSM_ISPIF_V1
           or raw data interface in VFE.
 
 config MSM_ISPIF_V2
-        bool "QTI MSM Image Signal Processing interface support"
+        bool "Qualcomm MSM Image Signal Processing interface support"
         depends on MSMB_CAMERA
         ---help---
           Enable support for Image Signal Processing interface module.
@@ -274,7 +229,7 @@ config OV12830
 		2 lanes max fps is 18, 4 lanes max fps is 24.
 
 config MSM_V4L2_VIDEO_OVERLAY_DEVICE
-	tristate "QTI MSM V4l2 video overlay device"
+	tristate "Qualcomm MSM V4l2 video overlay device"
 	---help---
 	  Enables support for the MSM V4L2 video
 	  overlay driver. This allows video rendering
@@ -282,8 +237,8 @@ config MSM_V4L2_VIDEO_OVERLAY_DEVICE
 	  APIs, by using /dev/videoX device
 
 config MSMB_JPEG
-	tristate "QTI MSM Jpeg Encoder Engine support"
-        depends on MSMB_CAMERA && (ARCH_MSM8974 || ARCH_MSM8226 || ARCH_APQ8084 || ARCH_MSM8916 || ARCH_MSM8953 || ARCH_MSM)
+	tristate "Qualcomm MSM Jpeg Encoder Engine support"
+        depends on MSMB_CAMERA && (ARCH_MSM8974 || ARCH_MSM8226 || ARCH_APQ8084 || ARCH_MSM8916 || ARCH_MSM)
 	---help---
 	  Enable support for Jpeg Encoder/Decoder
 	  Engine for 8974.
@@ -291,7 +246,7 @@ config MSMB_JPEG
 	  for the JPEG 1.0 encoder and decoder.
 
 config MSM_GEMINI
-	tristate "QTI MSM Gemini JPEG engine support"
+	tristate "Qualcomm MSM Gemini JPEG engine support"
 	depends on MSMB_CAMERA && (ARCH_MSM7X30 || ARCH_MSM8X60 || ARCH_MSM8960)
 	---help---
 	  Enables support for the Gemini JPEG encoder
@@ -300,86 +255,57 @@ config MSM_GEMINI
 	  for JPEG encoding functionality.
 
 config MSM_FD
-	 tristate "QTI MSM FD face detection engine support"
+	 tristate "Qualcomm MSM FD face detection engine support"
 	 depends on MSMB_CAMERA
 	 ---help---
 	    Enables support for the MSM FD face detection engine.
 
-config CAMERA_SYSFS_V2
-	bool "CAMERA SYS"
-	depends on MSMB_CAMERA
-	---help---
-		CAMERA SYS.
-
 config MSM_JPEGDMA
-	tristate "QTI MSM Jpeg dma"
+	tristate "Qualcomm Technologies Inc. MSM Jpeg dma"
         depends on MSMB_CAMERA
         select V4L2_MEM2MEM_DEV
 	---help---
 	  Enable support for Jpeg dma engine.
 
-config MSM_SEC_CCI_TA_NAME
-	string "Name of TA to handle Secure CCI transactions"
-	depends on MSM_CCI
-	default "seccamdemo64"
-
-config MSM_SEC_CCI_DEBUG
-	bool "QTI MSM Secure CCI Relay Debug"
-	depends on MSM_CCI
-	---help---
-	  Enables simulation of secure camera for Secure CCI Realy
-	  debugging.
-
-config SAMSUNG_MULTI_CAMERA
-	tristate "Multi camera support"
-	depends on MSMB_CAMERA
-	default n
-	---help---
-	  Enables support for multi camera.
-
 config GET_REAR_MODULE_ID
-        tristate "Rear Camera Module ID from 0xAE"
+	tristate "Rear Camera Module ID from 0xAE"
         depends on MSMB_CAMERA
-        ---help---
-          Enable support to get module ID 10byte from eeprom 0xAE then 
-          set to sys_class_camera_rear_moduleid
+	---help---
+	  Enable support to get module ID 10byte from eeprom 0xAE then set to sys_class_camera_rear_moduleid
+
+config DISABLE_SVC_REAR_MODULE
+	tristate "Rear Camera Module ID from 0xAE"
+        depends on MSMB_CAMERA
+	---help---
+	  Disable support to get module ID 10byte from eeprom 0xAE then not set to sys_devices_svc_Camera_SVC_rear_module
 
 config GET_FRONT_MODULE_ID
-        tristate "Front Camera Module ID from 0x56"
+	tristate "Front Camera Module ID from 0xAE"
         depends on MSMB_CAMERA
-        ---help---
-          Enable support to get module ID 10byte from eeprom 0x56 then 
-          set to sys_class_camera_front_moduleid
+	---help---
+	  Enable support to get module ID 10byte from eeprom 0xAE then set to sys_class_camera_front_moduleid
 
-config GET_FRONT_MODULE_ID_OTP
-        tristate "Front Camera Module ID from OTP"
-        depends on MSMB_CAMERA
-        ---help---
-          Enable support to get module ID 10byte from OTP then 
-          set to sys_class_camera_front_moduleid
+config LEDS_SM5705
+	tristate "Siliconmitus SM5705 flash LED driver"
+		depends on MSMB_CAMERA
+	---help---
+	  A driver for Siliconmitus SM5705 flash LED	  
 
-config GET_REAR_SENSOR_ID
-        tristate "Rear Sensor ID from 0xB8"
-        depends on MSMB_CAMERA
-        ---help---
-          Enable support to get rear camera sensor ID 10byte from eeprom 0xB8 then
-          set to sys_class_camera_rear_sensorid_exif
+config FLED_SM5703
+	tristate "Siliconmitus SM5703 flash LED driver"
+		depends on MSMB_CAMERA
+	---help---
+	  A driver for Siliconmitus SM5703 flash LED
+	  
+config LEDS_KTD2692
+	tristate "LED driver for KTD2692 LED"
+	  help
+	  A driver for KTD2692 flash LED
+	  This option enables support for the LEDs on the KTD2692.
 
-config GET_FRONT_SENSOR_ID
-        tristate "Front Sensor ID from 0x60"
-        depends on MSMB_CAMERA
-        ---help---
-          Enable support to get front camera sensor ID 10byte from eeprom 0x60 then
-          set to sys_class_camera_front_sensorid_exif
-
-config CAMERA_DUAL_REAR
-        tristate "Rear Multi camera support"
-        depends on MSMB_CAMERA
-        ---help---
-          Enables support for rear multi camera.
-
-config CAMERA_DUAL_FRONT
-        tristate "Front Multi camera support"
-        depends on MSMB_CAMERA
-        ---help---
-          Enables support for front multi camera.
+config FRONT_FLASH
+	bool "Rear LED and Front LED both USING"
+	depends on MSMB_CAMERA
+	---help---
+		ONLY for Front FLASH Model using.
+		Front LED for LM3632 or KTD2692 Rear LED SM5703.

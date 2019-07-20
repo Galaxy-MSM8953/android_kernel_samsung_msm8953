@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -20,8 +20,9 @@
 
 #undef CDBG
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
-#define CDBG_V(fmt, args...) pr_debug(fmt, ##args)
 
+#define MAX_READ_SIZE 3824
+#define EEPROM_QUP_I2C
 
 DEFINE_MSM_MUTEX(msm_eeprom_mutex);
 #ifdef CONFIG_COMPAT
@@ -32,63 +33,22 @@ struct msm_eeprom_ctrl_t *g_ectrl[MAX_CAMERAS];
 
 #if defined(CONFIG_GET_REAR_MODULE_ID)
 extern uint8_t rear_module_id[FROM_MODULE_ID_SIZE + 1];
-extern uint8_t rear2_module_id[FROM_MODULE_ID_SIZE + 1];
 #endif
+
 #if defined(CONFIG_GET_FRONT_MODULE_ID)
 extern uint8_t front_module_id[FROM_MODULE_ID_SIZE + 1];
 #endif
-extern int rear_af_cal[FROM_REAR_AF_CAL_SIZE + 1];
-#if  defined(CONFIG_GET_REAR_SENSOR_ID)
-extern char rear_sensor_id[FROM_SENSOR_ID_SIZE + 1];
-extern char rear2_sensor_id[FROM_SENSOR_ID_SIZE + 1];
-#endif
-#if defined(CONFIG_GET_FRONT_SENSOR_ID)
-extern uint8_t front_sensor_id[FROM_SENSOR_ID_SIZE + 1];
-#endif
-#if defined(CONFIG_SAMSUNG_MULTI_CAMERA)
-#if defined(CONFIG_CAMERA_DUAL_REAR)
-extern int rear2_af_cal[FROM_REAR_AF_CAL_SIZE + 1];
-extern uint8_t rear_dual_cal[FROM_REAR_DUAL_CAL_SIZE + 1];
-extern int rear2_dual_tilt_x;
-extern int rear2_dual_tilt_y;
-extern int rear2_dual_tilt_z;
-extern int rear2_dual_tilt_sx;
-extern int rear2_dual_tilt_sy;
-extern int rear2_dual_tilt_range;
-extern int rear2_dual_tilt_max_err;
-extern int rear2_dual_tilt_avg_err;
-extern int rear2_dual_tilt_dll_ver;
-#endif
-#if defined(CONFIG_CAMERA_DUAL_FRONT)
-//extern int front2_af_cal[FROM_FRONT_AF_CAL_SIZE + 1];
-extern uint8_t front_dual_cal[FROM_FRONT_DUAL_CAL_SIZE + 1];
-extern int front2_dual_tilt_x;
-extern int front2_dual_tilt_y;
-extern int front2_dual_tilt_z;
-extern int front2_dual_tilt_sx;
-extern int front2_dual_tilt_sy;
-extern int front2_dual_tilt_range;
-extern int front2_dual_tilt_max_err;
-extern int front2_dual_tilt_avg_err;
-extern int front2_dual_tilt_dll_ver;
-#endif
-#endif
 
-extern char front_mtf_exif[FROM_MTF_SIZE + 1];
-extern char rear_mtf_exif[FROM_MTF_SIZE + 1];
-#if defined(CONFIG_SAMSUNG_MULTI_CAMERA)
-#if defined(CONFIG_CAMERA_DUAL_FRONT)
-extern char front2_mtf_exif[FROM_MTF_SIZE + 1];
-#endif
-#if defined(CONFIG_CAMERA_DUAL_REAR)
-extern char rear2_mtf_exif[FROM_MTF_SIZE + 1];
-#endif
-#endif
+void *msm_get_eeprom_data_base(int id, uint32_t *size)
+{
+	struct msm_eeprom_ctrl_t *e_ctrl = NULL;
+	e_ctrl = g_ectrl[id];
+	if (!e_ctrl || !size)
+		return NULL;
 
-static int msm_eeprom_get_dt_data(struct msm_eeprom_ctrl_t *e_ctrl);
-#ifdef CONFIG_COMPAT
-static long msm_eeprom_subdev_fops_ioctl32(struct file *file, unsigned int cmd, unsigned long arg);
-#endif
+	*size = e_ctrl->cal_data.num_data;
+	return e_ctrl->cal_data.mapdata;
+}
 
 /**
   * msm_get_read_mem_size - Get the total size for allocation
@@ -163,60 +123,37 @@ static int msm_eeprom_verify_sum(const char *mem, uint32_t size, uint32_t sum)
   * Returns a bitmask of verified regions, starting from LSB.  1 indicates
   * a checksum match, while 0 indicates checksum mismatch or not verified.
   */
-static uint32_t msm_eeprom_match_crc(struct msm_eeprom_memory_block_t *data, uint32_t subdev_id)
+static uint32_t msm_eeprom_match_crc(struct msm_eeprom_memory_block_t *data)
 {
 	int j, rc;
 	uint32_t *sum;
 	uint32_t ret = 0;
 	uint8_t *memptr, *memptr_crc;
 	struct msm_eeprom_memory_map_t *map;
-	uint8_t special_block = 0;
 
 	if (!data) {
 		pr_err("%s data is NULL", __func__);
 		return -EINVAL;
 	}
 	map = data->map;
-	memptr = data->mapdata;
 
 	for (j = 0; j + 1 < data->num_map; j += 2) {
-		/* empty table or no checksum */
 		memptr = data->mapdata + map[j].mem.addr;
 		memptr_crc = data->mapdata + map[j+1].mem.addr;
-
-		/* exception handle case */		
-		/* set the 0x0 to dtsi checksum block both valid_size and addr*/
-		/* requested cal map read after cal map fixed  */
-		/* just read address data and skip crc check   */
-		if (!map[j+1].mem.valid_size && !map[j+1].mem.addr) {
-			special_block = 1;
-			continue;
-		}
 		/* empty table or no checksum */
-		if (!map[j].mem.valid_size || !map[j+1].mem.valid_size) {
+		if (!map[j].mem.valid_size || !map[j+1].mem.valid_size)
 			continue;
-		}
-		if (map[j+1].mem.valid_size != sizeof(uint32_t)) {
-			CDBG("%s: malformatted data mapping\n", __func__);
-			return -EINVAL;
-		}
-		sum = (uint32_t *) (memptr_crc);
+
+		sum = (uint32_t *)memptr_crc;
 		CDBG("%s : j= %d map[j].mem.valid_size = %d, map[j+1].mem.valid_size = %d \n",__func__,j,map[j].mem.valid_size,map[j+1].mem.valid_size);
 		rc = msm_eeprom_verify_sum(memptr, map[j].mem.valid_size,*sum);
-
-		if (!rc)
-		{
-			if(special_block) {
-				ret |= 1 << ((j-2)/2);
-				special_block = 0;	
-			}
-			else {
-			    ret |= 1 << (j/2);
-			}
+		if (!rc) {
+			ret |= 1 << (j/2);
 		}
 	}
 	return ret;
 }
+
 
 /**
   * read_eeprom_memory() - read map data into buffer
@@ -234,10 +171,12 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 	struct msm_eeprom_memory_map_t *emap = block->map;
 	struct msm_eeprom_board_info *eb_info;
 	uint8_t *memptr = block->mapdata;
-	uint32_t read_addr, read_size, size;
+#ifdef EEPROM_QUP_I2C
+	uint32_t size = 0;
+#endif
 
 	if (!e_ctrl) {
-		pr_err("%s e_ctrl is NULL \n", __func__);
+		pr_err("%s e_ctrl is NULL", __func__);
 		return -EINVAL;
 	}
 
@@ -287,37 +226,37 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 		}
 
 		if (emap[j].mem.valid_size) {
-		    memptr = block->mapdata + emap[j].mem.addr;
-			pr_err("%s: %d memptr = %p, addr = 0x%X, size = %d\n", __func__, __LINE__, memptr, emap[j].mem.addr, emap[j].mem.valid_size);
-			
-			if (e_ctrl->eeprom_device_type == MSM_CAMERA_I2C_DEVICE) {
 			e_ctrl->i2c_client.addr_type = emap[j].mem.addr_t;
-				read_addr = emap[j].mem.addr;
-				read_size = emap[j].mem.valid_size;
-				for (size=emap[j].mem.valid_size; size>0; size-=read_size) {
-					if (size > 0xEC0) // i2c bam max size
-					{
-						read_size = 0xEC0;
-					}
-					else
+#ifdef EEPROM_QUP_I2C
+			/* EEPROM uses QUP I2C, QUP supports 3825bytes I2C read at a time,
+			   Here 4608Bytes will be read from EEPROM, So 4608Bytes are divided into two parts,
+			   3824 bytes and 784 bytes. */
+			if(emap[j].mem.valid_size > MAX_READ_SIZE)
 			{
-						read_size = size;
-					}
+				size = MAX_READ_SIZE;
+				memptr = block->mapdata + emap[j].mem.addr;
 				rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
-						&(e_ctrl->i2c_client), read_addr,
-						memptr, read_size);
+						&(e_ctrl->i2c_client), emap[j].mem.addr,
+						memptr, size);
 				if (rc < 0) {
 					pr_err("%s: read failed\n", __func__);
 					return rc;
 				}
-					if (size > 0xEC0) // i2c bam max size
-					{
-						memptr += read_size;
-						read_addr += read_size;
+
+				size = emap[j].mem.valid_size - MAX_READ_SIZE;
+				memptr += MAX_READ_SIZE;
+				rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
+						&(e_ctrl->i2c_client),(emap[j].mem.addr + MAX_READ_SIZE) ,
+						memptr, size);
+				if (rc < 0) {
+					pr_err("%s: read failed\n", __func__);
+					return rc;
 				}
+				memptr += size;
 			}
-			} else {
-			e_ctrl->i2c_client.addr_type = emap[j].mem.addr_t;
+			else
+			{
+				memptr = block->mapdata + emap[j].mem.addr;
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
 				&(e_ctrl->i2c_client), emap[j].mem.addr,
 				memptr, emap[j].mem.valid_size);
@@ -325,9 +264,22 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 				pr_err("%s: read failed\n", __func__);
 				return rc;
 			}
+			memptr += emap[j].mem.valid_size;
 		}
 		}
+#else
+			CDBG("%s %d \n", __func__, __LINE__);
+			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_read_seq(
+						&(e_ctrl->i2c_client), emap[j].mem.addr, memptr, emap[j].mem.valid_size);
+			CDBG("%s %d \n", __func__, __LINE__);
 
+			if (rc < 0) {
+				pr_err("%s: read failed\n", __func__);
+				return rc;
+			}
+			memptr += emap[j].mem.valid_size;
+		}
+#endif
 		if (emap[j].pageen.valid_size) {
 			e_ctrl->i2c_client.addr_type = emap[j].pageen.addr_t;
 			rc = e_ctrl->i2c_client.i2c_func_tbl->i2c_write(
@@ -389,7 +341,7 @@ static int msm_eeprom_parse_memory_map(struct device_node *of,
 		rc = of_property_read_u32_array(of, property,
 			(uint32_t *) &map[i].pageen, count);
 		if (rc < 0)
-			CDBG("%s: pageen not needed\n", __func__);
+			pr_err("%s: pageen not needed\n", __func__);
 
 		snprintf(property, PROPERTY_MAXSIZE, "qcom,saddr%d", i);
 		rc = of_property_read_u32_array(of, property,
@@ -428,7 +380,7 @@ static int msm_eeprom_parse_memory_map(struct device_node *of,
 		CDBG("%s::%d set num_data as total-size in order to use same address at cal map(total : %d, valid : %d)\n",
 			__func__,__LINE__, total_size, data->num_data);
 		data->num_data = total_size;
-	}	
+	}
 
 	data->mapdata = kzalloc(data->num_data, GFP_KERNEL);
 	if (!data->mapdata) {
@@ -544,7 +496,7 @@ static int eeprom_parse_memory_map(struct msm_eeprom_ctrl_t *e_ctrl,
 	}
 	memptr = e_ctrl->cal_data.mapdata;
 	for (i = 0; i < e_ctrl->cal_data.num_data; i++)
-		CDBG_V("memory_data[%x] = 0x%X\n", i, memptr[i]);
+		pr_debug("memory_data[%d] = 0x%X\n", i, memptr[i]);
 	return rc;
 
 clean_up:
@@ -729,36 +681,17 @@ static int eeprom_config_read_cal_data(struct msm_eeprom_ctrl_t *e_ctrl,
 	/* check range */
 	if (cdata->cfg.read_data.num_bytes >
 		e_ctrl->cal_data.num_data || cdata->cfg.read_data.addr>e_ctrl->cal_data.num_data) {
-		CDBG("%s: Invalid size. exp %u, req %u, addr %x\n", __func__,
+		CDBG("%s: Invalid size or addr. exp %u, req %u, addr %x\n", __func__,
 			e_ctrl->cal_data.num_data,
 			cdata->cfg.read_data.num_bytes,cdata->cfg.read_data.addr);
 		return -EINVAL;
 	}
-
+	if (!e_ctrl->cal_data.mapdata)
+		return -EFAULT;
 	rc = copy_to_user(cdata->cfg.read_data.dbuffer,
 		e_ctrl->cal_data.mapdata + cdata->cfg.read_data.addr,
 		cdata->cfg.read_data.num_bytes);
 
-	return rc;
-}
-
-static int msm_eeprom_reload_eeprom_data(struct msm_eeprom_ctrl_t *e_ctrl)
-{
-	int rc = 0;
-    rc = msm_camera_power_up(&e_ctrl->eboard_info->power_info,
-            e_ctrl->eeprom_device_type, &e_ctrl->i2c_client);
-
-	rc = read_eeprom_memory(e_ctrl, &e_ctrl->cal_data);
-	if (rc < 0) {
-		CDBG("%s: read cal data failed\n", __func__);
-		return rc;
-	}
-	e_ctrl->is_supported |= msm_eeprom_match_crc(&e_ctrl->cal_data, e_ctrl->subdev_id);
-    
-    rc = msm_camera_power_down(&e_ctrl->eboard_info->power_info,
-            e_ctrl->eeprom_device_type, &e_ctrl->i2c_client);
-			
-	CDBG("%s: Done \n", __func__);
 	return rc;
 }
 
@@ -784,12 +717,12 @@ static int msm_eeprom_config(struct msm_eeprom_ctrl_t *e_ctrl,
 		length = strlen(e_ctrl->eboard_info->eeprom_name) + 1;
 		if (length > MAX_EEPROM_NAME) {
 			pr_err("%s:%d invalid eeprom_name length %d\n",
-				__func__, __LINE__, (int)length);
+			__func__, __LINE__, (int)length);
 			rc = -EINVAL;
 			break;
 		}
-		memcpy(cdata->cfg.eeprom_name,
-			e_ctrl->eboard_info->eeprom_name, length);
+		
+		memcpy(cdata->cfg.eeprom_name, e_ctrl->eboard_info->eeprom_name, length);
 		break;
 	case CFG_EEPROM_GET_CAL_DATA:
 		CDBG("%s E CFG_EEPROM_GET_CAL_DATA\n", __func__);
@@ -822,15 +755,6 @@ static int msm_eeprom_config(struct msm_eeprom_ctrl_t *e_ctrl,
 			CDBG("%s:%d Already read eeprom\n",
 				__func__, __LINE__);
 		}
-		break;
-	case CFG_EEPROM_READ_DATA_FROM_HW:
-		CDBG("%s E CFG_EEPROM_READ_DATA_FROM_HW", __func__);
-		e_ctrl->is_supported = 1;
-		CDBG ("is_supported before %X\n",e_ctrl->is_supported);
-		rc = msm_eeprom_reload_eeprom_data(e_ctrl);
-		CDBG ("is_supported after %X\n",e_ctrl->is_supported);
-        e_ctrl->is_supported = (e_ctrl->is_supported << 1) | 1;
-		cdata->is_supported = e_ctrl->is_supported;
 		break;
 	default:
 		break;
@@ -900,7 +824,6 @@ static struct msm_camera_i2c_fn_t msm_eeprom_qup_func_tbl = {
 static struct msm_camera_i2c_fn_t msm_eeprom_spi_func_tbl = {
 	.i2c_read = msm_camera_spi_read,
 	.i2c_read_seq = msm_camera_spi_read_seq,
-	.i2c_write_seq = msm_camera_spi_write_seq,
 };
 
 static int msm_eeprom_open(struct v4l2_subdev *sd,
@@ -929,6 +852,15 @@ static int msm_eeprom_close(struct v4l2_subdev *sd,
 	return rc;
 }
 
+static struct msm_cam_clk_info cam_8960_clk_info[] = {
+	[SENSOR_CAM_MCLK] = {"cam_clk", 24000000},
+};
+
+static struct msm_cam_clk_info cam_8974_clk_info[] = {
+	[SENSOR_CAM_MCLK] = {"cam_src_clk", 19200000},
+	[SENSOR_CAM_CLK] = {"cam_clk", 0},
+};
+
 static const struct v4l2_subdev_internal_ops msm_eeprom_internal_ops = {
 	.open = msm_eeprom_open,
 	.close = msm_eeprom_close,
@@ -940,10 +872,6 @@ static struct v4l2_subdev_core_ops msm_eeprom_subdev_core_ops = {
 
 static struct v4l2_subdev_ops msm_eeprom_subdev_ops = {
 	.core = &msm_eeprom_subdev_core_ops,
-};
-
-static struct msm_cam_clk_info cam_8960_clk_info[] = {
-	[SENSOR_CAM_MCLK] = {"cam_clk", 24000000},
 };
 
 static int msm_eeprom_i2c_probe(struct i2c_client *client,
@@ -992,7 +920,6 @@ static int msm_eeprom_i2c_probe(struct i2c_client *client,
 		goto ectrl_free;
 	}
 
-	
 	if (g_ectrl[e_ctrl->subdev_id]) {
 		pr_err("eeprom id already present!\n");
 		goto i2c_board_free;
@@ -1002,8 +929,6 @@ static int msm_eeprom_i2c_probe(struct i2c_client *client,
 
 	rc = of_property_read_u32(client->dev.of_node, "qcom,slave-addr",
 		&temp);
-	CDBG("%s qcom,slave-addr 0x%x, rc %d\n", __func__,
-		temp, rc);
 	if (rc < 0) {
 		pr_err("%s failed rc %d\n", __func__, rc);
 		goto ectrl_free;
@@ -1034,11 +959,9 @@ static int msm_eeprom_i2c_probe(struct i2c_client *client,
 	power_info->clk_info_size = ARRAY_SIZE(cam_8960_clk_info);
 	power_info->dev = &client->dev;
 
-#if 0  //remove eebin
 	rc = msm_eeprom_cmm_dts(e_ctrl->eboard_info, of_node);
 	if (rc < 0)
 		CDBG("%s MM data miss:%d\n", __func__, __LINE__);
-#endif
 
 	rc = msm_eeprom_get_dt_data(e_ctrl);
 	if (rc)
@@ -1076,256 +999,10 @@ static int msm_eeprom_i2c_probe(struct i2c_client *client,
 		goto i2c_power_down;
 	}
 	for (j = 0; j < e_ctrl->cal_data.num_data; j++)
-		pr_debug("memory_data[%x] = 0x%X\n", j,
+		pr_debug("memory_data[%d] = 0x%X\n", j,
 			e_ctrl->cal_data.mapdata[j]);
 
-	e_ctrl->is_supported |= msm_eeprom_match_crc(&e_ctrl->cal_data, e_ctrl->subdev_id);
-
-	if( e_ctrl->subdev_id == 0 ) {
-#if defined( CONFIG_GET_REAR_SENSOR_ID )
-            /* rear sensor id */
-            memcpy(rear_sensor_id, &e_ctrl->cal_data.mapdata[FROM_REAR_SENSOR_ID_ADDR], FROM_SENSOR_ID_SIZE);
-            rear_sensor_id[FROM_SENSOR_ID_SIZE] = '\0';
-
-            CDBG("%s : %d rear sensor_id = %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x", __func__, e_ctrl->subdev_id,
-                rear_sensor_id[0], rear_sensor_id[1], rear_sensor_id[2], rear_sensor_id[3],
-                rear_sensor_id[4], rear_sensor_id[5], rear_sensor_id[6], rear_sensor_id[7],
-                rear_sensor_id[8], rear_sensor_id[9], rear_sensor_id[10], rear_sensor_id[11],
-                rear_sensor_id[12], rear_sensor_id[13], rear_sensor_id[14], rear_sensor_id[15]);
-
-            /* rear2 sensor id */
-            memcpy(rear2_sensor_id, &e_ctrl->cal_data.mapdata[FROM_REAR2_SENSOR_ID_ADDR], FROM_SENSOR_ID_SIZE);
-            rear2_sensor_id[FROM_SENSOR_ID_SIZE] = '\0';
-
-            CDBG("%s : %d rear2 sensor_id = %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x", __func__, e_ctrl->subdev_id,
-                rear2_sensor_id[0], rear2_sensor_id[1], rear2_sensor_id[2], rear2_sensor_id[3],
-                rear2_sensor_id[4], rear2_sensor_id[5], rear2_sensor_id[6], rear2_sensor_id[7],
-                rear2_sensor_id[8], rear2_sensor_id[9], rear2_sensor_id[10], rear2_sensor_id[11],
-                rear2_sensor_id[12], rear2_sensor_id[13], rear2_sensor_id[14], rear2_sensor_id[15]);
-#endif
-#if defined( CONFIG_GET_REAR_MODULE_ID )
-	/* rear module id */
-            memcpy(rear_module_id, &(e_ctrl->cal_data.mapdata[FROM_REAR_MODULE_ID_ADDR]), FROM_MODULE_ID_SIZE);
-            rear_module_id[FROM_MODULE_ID_SIZE] = '\0';
-
-            CDBG("%s : %d rear_module_id = %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n", __func__, e_ctrl->subdev_id,
-                rear_module_id[0], rear_module_id[1], rear_module_id[2], rear_module_id[3], rear_module_id[4],
-                rear_module_id[5], rear_module_id[6], rear_module_id[7], rear_module_id[8], rear_module_id[9]);
-
-            /* rear2 module id */
-            memcpy(rear2_module_id, &(e_ctrl->cal_data.mapdata[FROM_REAR2_MODULE_ID_ADDR]), FROM_MODULE_ID_SIZE);
-            rear2_module_id[FROM_MODULE_ID_SIZE] = '\0';
-
-            CDBG("%s : %d rear2_module_id = %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n", __func__, e_ctrl->subdev_id,
-                rear2_module_id[0], rear2_module_id[1], rear2_module_id[2], rear2_module_id[3], rear2_module_id[4],
-                rear2_module_id[5], rear2_module_id[6], rear2_module_id[7], rear2_module_id[8], rear2_module_id[9]);
-#endif
-	}
-	
-	if( e_ctrl->subdev_id == 1 ) {
-#if defined( CONFIG_GET_FRONT_SENSOR_ID )
-            /* front sensor id */
-            memcpy(front_sensor_id, &e_ctrl->cal_data.mapdata[FROM_FRONT_SENSOR_ID_ADDR], FROM_SENSOR_ID_SIZE);
-            front_sensor_id[FROM_SENSOR_ID_SIZE] = '\0';
-
-            CDBG("%s: %d front sensor_id = %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x", __func__, e_ctrl->subdev_id,
-                front_sensor_id[0], front_sensor_id[1], front_sensor_id[2], front_sensor_id[3],
-                front_sensor_id[4], front_sensor_id[5], front_sensor_id[6], front_sensor_id[7],
-                front_sensor_id[8], front_sensor_id[9], front_sensor_id[10], front_sensor_id[11],
-                front_sensor_id[12], front_sensor_id[13], front_sensor_id[14], front_sensor_id[15]);
-#endif
-#if defined( CONFIG_GET_FRONT_MODULE_ID )
-	/* front module id */
-            memcpy(front_module_id, &(e_ctrl->cal_data.mapdata[FROM_FRONT_MODULE_ID_ADDR]), FROM_MODULE_ID_SIZE);
-            front_module_id[FROM_MODULE_ID_SIZE] = '\0';
-
-            CDBG("%s : %d front_module_id = %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n", __func__, e_ctrl->subdev_id,
-                front_module_id[0], front_module_id[1], front_module_id[2], front_module_id[3], front_module_id[4],
-                front_module_id[5], front_module_id[6], front_module_id[7], front_module_id[8], front_module_id[9]);
-#endif
-	}
-
-        /*rear af cal*/
-        /*first two bytes of the CAL data is FFFF, so only last two bytes has valid data*/
-#if defined(FROM_REAR_AF_CAL_MACRO_ADDR)
-    if( e_ctrl->subdev_id == 0 )
-        memcpy(&rear_af_cal[0], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_MACRO_ADDR], 2);
-#endif
-#if defined(FROM_REAR_AF_CAL_PAN_ADDR)
-    if( e_ctrl->subdev_id == 0 )
-        memcpy(&rear_af_cal[9], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_PAN_ADDR], 2);
-#endif
-
-#if defined(CONFIG_SAMSUNG_MULTI_CAMERA)
-#if defined(CONFIG_CAMERA_DUAL_REAR)
-    if( e_ctrl->subdev_id == 0 ) {
-	    memcpy(rear_dual_cal, &e_ctrl->cal_data.mapdata[FROM_REAR_DUAL_CAL_ADDR], FROM_REAR_DUAL_CAL_SIZE);
-	    rear_dual_cal[FROM_REAR_DUAL_CAL_SIZE] = '\0';
-        CDBG("%s : %d rear dual cal = %s", __func__, e_ctrl->subdev_id, rear_dual_cal);
-    }
-	if( e_ctrl->subdev_id == 0 ) {
-		/* rear2 tilt */
-		memcpy(&rear2_dual_tilt_x, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_X], 4);
-		memcpy(&rear2_dual_tilt_y, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_Y], 4);
-		memcpy(&rear2_dual_tilt_z, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_Z], 4);
-		memcpy(&rear2_dual_tilt_sx, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_SX], 4);
-		memcpy(&rear2_dual_tilt_sy, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_SY], 4);
-		memcpy(&rear2_dual_tilt_range, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_RANGE], 4);
-		memcpy(&rear2_dual_tilt_max_err, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_MAX_ERR], 4);
-		memcpy(&rear2_dual_tilt_avg_err, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_AVG_ERR], 4);
-		memcpy(&rear2_dual_tilt_dll_ver, &e_ctrl->cal_data.mapdata[FROM_REAR2_DUAL_TILT_DLL_VERSION], 4);
-		CDBG("%s : %d rear dual tilt x = %d, y = %d, z = %d, sx = %d, sy = %d, range = %d, max_err = %d, avg_err = %d, dll_ver = %d\n",
-			__func__, e_ctrl->subdev_id, rear2_dual_tilt_x, rear2_dual_tilt_y, rear2_dual_tilt_z, rear2_dual_tilt_sx, rear2_dual_tilt_sy,
-			rear2_dual_tilt_range, rear2_dual_tilt_max_err, rear2_dual_tilt_avg_err, rear2_dual_tilt_dll_ver);
-	}
-
-         /*rear af cal*/
-        /*first two bytes of the CAL data is FFFF, so only last two bytes has valid data*/
-#if defined(FROM_REAR_AF_CAL_MACRO_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[0], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_MACRO_ADDR], 2);
-#endif
-#if defined(FROM_REAR_AF_CAL_D10_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[1], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_D10_ADDR], 4);
-#endif
-#if defined(FROM_REAR_AF_CAL_D20_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[2], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_D20_ADDR], 4);
-#endif
-#if defined(FROM_REAR_AF_CAL_D30_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[3], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_D30_ADDR], 4);
-#endif
-#if defined(FROM_REAR_AF_CAL_D40_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[4], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_D40_ADDR], 4);
-#endif
-#if defined(FROM_REAR_AF_CAL_D50_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[5], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_D50_ADDR], 4);
-#endif
-#if defined(FROM_REAR_AF_CAL_D60_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[6], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_D60_ADDR], 4);
-#endif
-#if defined(FROM_REAR_AF_CAL_D70_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-                memcpy(&rear_af_cal[7], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_D70_ADDR], 4);
-#endif
-#if defined(FROM_REAR_AF_CAL_D80_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[8], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_D80_ADDR], 4);
-#endif
-        /*first two bytes of the CAL data is FFFF, so only last two bytes has valid data*/
-#if defined(FROM_REAR_AF_CAL_PAN_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear_af_cal[9], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_PAN_ADDR], 2);
-#endif
-
-#ifdef	REAR2_HAVE_AF_CAL_DATA
-			/*rear2 af cal*/
-#if defined(FROM_REAR2_AF_CAL_MACRO_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear2_af_cal[0], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_MACRO_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_D10_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-                memcpy(&rear2_af_cal[1], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_D10_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_D20_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear2_af_cal[2], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_D20_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_D30_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear2_af_cal[3], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_D30_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_D40_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-		memcpy(&rear2_af_cal[4], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_D40_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_D50_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-		memcpy(&rear2_af_cal[5], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_D50_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_D60_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-                memcpy(&rear2_af_cal[6], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_D60_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_D70_ADDR)        
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear2_af_cal[7], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_D70_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_D80_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear2_af_cal[8], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_D80_ADDR], 4);
-#endif
-#if defined(FROM_REAR2_AF_CAL_PAN_ADDR)
-        if( e_ctrl->subdev_id == 0 )
-	        memcpy(&rear2_af_cal[9], &e_ctrl->cal_data.mapdata[FROM_REAR2_AF_CAL_PAN_ADDR], 4);
-#endif	
-#endif
-#endif
-#if defined(CONFIG_CAMERA_DUAL_FRONT)
-	if( e_ctrl->subdev_id == 1 ) {
-		memcpy(front_dual_cal, &e_ctrl->cal_data.mapdata[FROM_FRONT_DUAL_CAL_ADDR], FROM_FRONT_DUAL_CAL_SIZE);
-		front_dual_cal[FROM_FRONT_DUAL_CAL_SIZE] = '\0';
-		CDBG("%s : %d front dual cal = %s", __func__, e_ctrl->subdev_id, front_dual_cal);
-	}
-	if( e_ctrl->subdev_id == 1 ) {
-		/* front2 tilt */
-		memcpy(&front2_dual_tilt_x, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_X], 4);
-		memcpy(&front2_dual_tilt_y, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_Y], 4);
-		memcpy(&front2_dual_tilt_z, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_Z], 4);
-		memcpy(&front2_dual_tilt_sx, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_SX], 4);
-		memcpy(&front2_dual_tilt_sy, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_SY], 4);
-		memcpy(&front2_dual_tilt_range, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_RANGE], 4);
-		memcpy(&front2_dual_tilt_max_err, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_MAX_ERR], 4);
-		memcpy(&front2_dual_tilt_avg_err, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_AVG_ERR], 4);
-		memcpy(&front2_dual_tilt_dll_ver, &e_ctrl->cal_data.mapdata[FROM_FRONT2_DUAL_TILT_DLL_VERSION], 4);
-		CDBG("%s : %d fornt dual tilt x = %d, y = %d, z = %d, sx = %d, sy = %d, range = %d, max_err = %d, avg_err = %d, dll_ver = %d\n",
-			__func__, e_ctrl->subdev_id, front2_dual_tilt_x, front2_dual_tilt_y, front2_dual_tilt_z, front2_dual_tilt_sx, front2_dual_tilt_sy,
-			front2_dual_tilt_range, front2_dual_tilt_max_err, front2_dual_tilt_avg_err, front2_dual_tilt_dll_ver);
-	}
-#endif
-#endif
-
-	/* rear mtf exif */
-	if( e_ctrl->subdev_id == 0 )
-	{
-			/* rear mtf exif */
-		memcpy(rear_mtf_exif, &e_ctrl->cal_data.mapdata[FROM_REAR_MTF_ADDR], FROM_MTF_SIZE);
-	    rear_mtf_exif[FROM_MTF_SIZE] = '\0';
-	    CDBG("%s : %d rear mtf exif = %s", __func__, e_ctrl->subdev_id, rear_mtf_exif);
-	}	
-/* front mtf exif */
-    if( e_ctrl->subdev_id == 1 )
-    {
-		memcpy(front_mtf_exif, &e_ctrl->cal_data.mapdata[FROM_FRONT_MTF_ADDR], FROM_MTF_SIZE);
-	    front_mtf_exif[FROM_MTF_SIZE] = '\0';
-	    CDBG("%s : %d front mtf exif = %s", __func__, e_ctrl->subdev_id, front_mtf_exif);
-    }
-#if defined(CONFIG_SAMSUNG_MULTI_CAMERA)
-#if defined(CONFIG_CAMERA_DUAL_FRONT)
-	/* front2 mtf exif */
-	if( e_ctrl->subdev_id == 1 )
-    {
-		memcpy(front2_mtf_exif, &e_ctrl->cal_data.mapdata[FROM_FRONT2_MTF_ADDR], FROM_MTF_SIZE);
-	    front2_mtf_exif[FROM_MTF_SIZE] = '\0';
-	    CDBG("%s : %d front2 mtf exif = %s", __func__, e_ctrl->subdev_id, front2_mtf_exif);
-    }
-#endif
-#if defined(CONFIG_CAMERA_DUAL_REAR)
-	/* rear2 mtf exif */
-    if( e_ctrl->subdev_id == 0 )
-    {
-	    memcpy(rear2_mtf_exif, &e_ctrl->cal_data.mapdata[FROM_REAR2_MTF_ADDR], FROM_MTF_SIZE);
-	    rear2_mtf_exif[FROM_MTF_SIZE] = '\0';
-	    CDBG("%s : %d rear2 mtf exif = %s", __func__, e_ctrl->subdev_id, rear2_mtf_exif);
-	}
-#endif
-#endif
+	e_ctrl->is_supported |= msm_eeprom_match_crc(&e_ctrl->cal_data);
 
 	rc = msm_camera_power_down(power_info, e_ctrl->eeprom_device_type,
 		&e_ctrl->i2c_client);
@@ -1387,6 +1064,7 @@ static int msm_eeprom_i2c_remove(struct i2c_client *client)
 {
 	struct v4l2_subdev *sd = i2c_get_clientdata(client);
 	struct msm_eeprom_ctrl_t  *e_ctrl;
+
 	if (!sd) {
 		pr_err("%s: Subdevice is NULL\n", __func__);
 		return 0;
@@ -1508,7 +1186,6 @@ static int msm_eeprom_get_dt_data(struct msm_eeprom_ctrl_t *e_ctrl)
 	CDBG("%s gpio count %d\n", __func__, gpio_array_size);
 
 	if (gpio_array_size > 0) {
-		pr_err("%s table is creating.\n", __func__);
 		gpio_array = kzalloc(sizeof(uint16_t) * gpio_array_size,
 			GFP_KERNEL);
 		if (!gpio_array) {
@@ -1550,7 +1227,6 @@ ERROR1:
 }
 
 
-#if 0 // remove eebin. This is not used.
 static int msm_eeprom_cmm_dts(struct msm_eeprom_board_info *eb_info,
 	struct device_node *of_node)
 {
@@ -1582,7 +1258,6 @@ static int msm_eeprom_cmm_dts(struct msm_eeprom_board_info *eb_info,
 		cmm_data->cmm_size);
 	return 0;
 }
-#endif
 
 static int msm_eeprom_spi_setup(struct spi_device *spi)
 {
@@ -1618,7 +1293,7 @@ static int msm_eeprom_spi_setup(struct spi_device *spi)
 	CDBG("cell-index %d, rc %d\n", e_ctrl->subdev_id, rc);
 	if (rc < 0) {
 		pr_err("failed rc %d\n", rc);
-		return rc;
+		goto spi_free;
 	}
 
 	eb_info = kzalloc(sizeof(*eb_info), GFP_KERNEL);
@@ -1642,24 +1317,15 @@ static int msm_eeprom_spi_setup(struct spi_device *spi)
 	client->i2c_func_tbl = &msm_eeprom_spi_func_tbl;
 	client->addr_type = MSM_CAMERA_I2C_3B_ADDR;
 
-#if 0  //remove eebin
 	rc = msm_eeprom_cmm_dts(e_ctrl->eboard_info, spi->dev.of_node);
 	if (rc < 0)
 		CDBG("%s MM data miss:%d\n", __func__, __LINE__);
-#endif
-	power_info = &eb_info->power_info;
-	power_info->dev = &spi->dev;
 
-	/*Get clocks information*/
-	rc = msm_camera_i2c_dev_get_clk_info(
-		&spi->dev,
-		&power_info->clk_info,
-		&power_info->clk_ptr,
-		&power_info->clk_info_size);
-	if (rc < 0) {
-		pr_err("failed: msm_camera_get_clk_info rc %d", rc);
-		goto board_free;
-	}
+	power_info = &eb_info->power_info;
+
+	power_info->clk_info = cam_8974_clk_info;
+	power_info->clk_info_size = ARRAY_SIZE(cam_8974_clk_info);
+	power_info->dev = &spi->dev;
 
 	rc = msm_eeprom_get_dt_data(e_ctrl);
 	if (rc < 0)
@@ -1705,7 +1371,7 @@ static int msm_eeprom_spi_setup(struct spi_device *spi)
 				goto power_down;
 			}
 			e_ctrl->is_supported |= msm_eeprom_match_crc(
-				&e_ctrl->cal_data, e_ctrl->subdev_id);
+				&e_ctrl->cal_data);
 		}
 
 		rc = msm_camera_power_down(power_info,
@@ -1738,11 +1404,6 @@ power_down:
 	msm_camera_power_down(power_info, e_ctrl->eeprom_device_type,
 		&e_ctrl->i2c_client);
 caldata_free:
-	msm_camera_i2c_dev_put_clk_info(
-		&e_ctrl->i2c_client.spi_client->spi_master->dev,
-		&e_ctrl->eboard_info->power_info.clk_info,
-		&e_ctrl->eboard_info->power_info.clk_ptr,
-		e_ctrl->eboard_info->power_info.clk_info_size);
 	kfree(e_ctrl->cal_data.mapdata);
 	kfree(e_ctrl->cal_data.map);
 board_free:
@@ -1788,12 +1449,6 @@ static int msm_eeprom_spi_remove(struct spi_device *sdev)
 		pr_err("%s: eeprom device is NULL\n", __func__);
 		return 0;
 	}
-
-	msm_camera_i2c_dev_put_clk_info(
-		&e_ctrl->i2c_client.spi_client->spi_master->dev,
-		&e_ctrl->eboard_info->power_info.clk_info,
-		&e_ctrl->eboard_info->power_info.clk_ptr,
-		e_ctrl->eboard_info->power_info.clk_info_size);
 
 	kfree(e_ctrl->i2c_client.spi_client);
 	kfree(e_ctrl->cal_data.mapdata);
@@ -2003,9 +1658,10 @@ static int msm_eeprom_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 	int rc = 0;
 	size_t length = 0;
 
-	CDBG("%s E\n", __func__);
+	CDBG("%s E cfg type %d\n", __func__,cdata->cfgtype);
 	switch (cdata->cfgtype) {
 	case CFG_EEPROM_GET_INFO:
+		CDBG("%s CFG_EEPROM_GET_INFO user probe %d\n", __func__,e_ctrl->userspace_probe);
 		if (e_ctrl->userspace_probe == 1) {
 			pr_err("%s:%d Eeprom name should be module driver",
 				__func__, __LINE__);
@@ -2017,12 +1673,12 @@ static int msm_eeprom_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 		length = strlen(e_ctrl->eboard_info->eeprom_name) + 1;
 		if (length > MAX_EEPROM_NAME) {
 			pr_err("%s:%d invalid eeprom_name length %d\n",
-				__func__, __LINE__, (int)length);
+			__func__, __LINE__, (int)length);
 			rc = -EINVAL;
 			break;
-		}
-		memcpy(cdata->cfg.eeprom_name,
-			e_ctrl->eboard_info->eeprom_name, length);
+		}		
+		
+		memcpy(cdata->cfg.eeprom_name, e_ctrl->eboard_info->eeprom_name, length);
 		break;
 	case CFG_EEPROM_GET_CAL_DATA:
 		CDBG("%s E CFG_EEPROM_GET_CAL_DATA\n", __func__);
@@ -2049,15 +1705,6 @@ static int msm_eeprom_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 			CDBG("%s:%d Already read eeprom\n",
 				__func__, __LINE__);
 		}
-		break;
-	case CFG_EEPROM_READ_DATA_FROM_HW:
-		CDBG("%s E CFG_EEPROM_READ_DATA_FROM_HW", __func__);
-		e_ctrl->is_supported = 1;
-		CDBG ("is_supported before %X\n",e_ctrl->is_supported);
-		rc = msm_eeprom_reload_eeprom_data(e_ctrl);
-		CDBG ("is_supported after %X\n",e_ctrl->is_supported);
-        e_ctrl->is_supported = (e_ctrl->is_supported << 1) | 1;
-		cdata->is_supported = e_ctrl->is_supported;
 		break;
 	default:
 		break;
@@ -2132,8 +1779,8 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 	e_ctrl->is_supported = 0;
 	if (!of_node) {
 		pr_err("%s dev.of_node NULL\n", __func__);
-		rc = -EINVAL;
-		goto ectrl_free;
+		kfree(e_ctrl);
+		return -EINVAL;
 	}
 
 	/* Set platform device handle */
@@ -2145,8 +1792,8 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 		struct msm_camera_cci_client), GFP_KERNEL);
 	if (!e_ctrl->i2c_client.cci_client) {
 		pr_err("%s failed no memory\n", __func__);
-		rc = -ENOMEM;
-		goto ectrl_free;
+		kfree(e_ctrl);
+		return -ENOMEM;
 	}
 
 	e_ctrl->eboard_info = kzalloc(sizeof(
@@ -2163,18 +1810,11 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 	cci_client->cci_subdev = msm_cci_get_subdev();
 	cci_client->retries = 3;
 	cci_client->id_map = 0;
+
+	power_info->clk_info = cam_8974_clk_info;
+	power_info->clk_info_size = ARRAY_SIZE(cam_8974_clk_info);
 	power_info->dev = &pdev->dev;
-#if 0
-	/*Get clocks information*/
-	rc = msm_camera_get_clk_info(e_ctrl->pdev,
-		&power_info->clk_info,
-		&power_info->clk_ptr,
-		&power_info->clk_info_size);
-	if (rc < 0) {
-		pr_err("failed: msm_camera_get_clk_info rc %d", rc);
-		goto board_free;
-	}
-#endif
+
 	rc = of_property_read_u32(of_node, "cell-index",
 		&pdev->id);
 	CDBG("cell-index %d, rc %d\n", pdev->id, rc);
@@ -2203,7 +1843,7 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 	}
 
 	rc = msm_eeprom_get_dt_data(e_ctrl);
-	if (rc < 0)
+	if (rc)
 		goto board_free;
 
 	if (e_ctrl->userspace_probe == 0) {
@@ -2250,20 +1890,32 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 			goto power_down;
 		}
 		for (j = 0; j < e_ctrl->cal_data.num_data; j++)
-			CDBG_V("memory_data[%x] = 0x%X\n", j,
+			pr_debug("memory_data[%d] = 0x%X\n", j,
 				e_ctrl->cal_data.mapdata[j]);
 
-        /*rear af cal*/  //CCI EEPROM PROBE
-#if defined(FROM_REAR_AF_CAL_MACRO_ADDR)
-    if( e_ctrl->subdev_id == 0 )
-        memcpy(&rear_af_cal[0], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_MACRO_ADDR], 4);
-#endif
-#if defined(FROM_REAR_AF_CAL_PAN_ADDR)
-    if( e_ctrl->subdev_id == 0 )
-        memcpy(&rear_af_cal[9], &e_ctrl->cal_data.mapdata[FROM_REAR_AF_CAL_PAN_ADDR], 4);
-#endif
+		e_ctrl->is_supported |= msm_eeprom_match_crc(&e_ctrl->cal_data);
 
-		e_ctrl->is_supported |= msm_eeprom_match_crc(&e_ctrl->cal_data,  e_ctrl->subdev_id);
+#if defined( CONFIG_GET_REAR_MODULE_ID )
+		if( pdev->id == 0 ) {
+			memcpy(rear_module_id, &(e_ctrl->cal_data.mapdata[FROM_MODULE_ID_ADDR]), FROM_MODULE_ID_SIZE);
+			rear_module_id[FROM_MODULE_ID_SIZE] = '\0';
+      
+			CDBG("%s : %d rear_module_id = %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n", __func__, e_ctrl->subdev_id,
+				rear_module_id[0], rear_module_id[1], rear_module_id[2], rear_module_id[3], rear_module_id[4],
+				rear_module_id[5], rear_module_id[6], rear_module_id[7], rear_module_id[8], rear_module_id[9]);
+		}
+#endif  
+
+#if defined( CONFIG_GET_FRONT_MODULE_ID )
+		if( pdev->id == 1 ) {
+			memcpy(front_module_id, &(e_ctrl->cal_data.mapdata[FROM_MODULE_ID_ADDR]), FROM_MODULE_ID_SIZE);
+			front_module_id[FROM_MODULE_ID_SIZE] = '\0';
+      
+			CDBG("%s : %d front_module_id = %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n", __func__, e_ctrl->subdev_id,
+				front_module_id[0], front_module_id[1], front_module_id[2], front_module_id[3], front_module_id[4],
+				front_module_id[5], front_module_id[6], front_module_id[7], front_module_id[8], front_module_id[9]);
+		}
+#endif    
 
 		rc = msm_camera_power_down(power_info,
 			e_ctrl->eeprom_device_type, &e_ctrl->i2c_client);
@@ -2274,6 +1926,13 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 	} else
 		e_ctrl->is_supported = 1;
 
+	if (0 > of_property_read_u32(of_node, "qcom,sensor-position",
+				&temp)) {
+		pr_err("%s:%d Fail position, Default sensor position\n", __func__, __LINE__);
+		temp = 0;
+	}
+	CDBG("%s qcom,sensor-position %d\n", __func__,temp);
+	
 	v4l2_subdev_init(&e_ctrl->msm_sd.sd,
 		e_ctrl->eeprom_v4l2_subdev_ops);
 	v4l2_set_subdevdata(&e_ctrl->msm_sd.sd, e_ctrl);
@@ -2283,12 +1942,13 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 	snprintf(e_ctrl->msm_sd.sd.name,
 		ARRAY_SIZE(e_ctrl->msm_sd.sd.name), "msm_eeprom");
 	media_entity_init(&e_ctrl->msm_sd.sd.entity, 0, NULL, 0);
+	e_ctrl->msm_sd.sd.entity.flags = temp;
 	e_ctrl->msm_sd.sd.entity.type = MEDIA_ENT_T_V4L2_SUBDEV;
 	e_ctrl->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_EEPROM;
 	msm_sd_register(&e_ctrl->msm_sd);
 
 #ifdef CONFIG_COMPAT
-	msm_cam_copy_v4l2_subdev_fops(&msm_eeprom_v4l2_subdev_fops);
+	msm_eeprom_v4l2_subdev_fops = v4l2_subdev_fops;
 	msm_eeprom_v4l2_subdev_fops.compat_ioctl32 =
 		msm_eeprom_subdev_fops_ioctl32;
 	e_ctrl->msm_sd.sd.devnode->fops = &msm_eeprom_v4l2_subdev_fops;
@@ -2308,7 +1968,6 @@ board_free:
 	kfree(e_ctrl->eboard_info);
 cciclient_free:
 	kfree(e_ctrl->i2c_client.cci_client);
-ectrl_free:
 	kfree(e_ctrl);
 	return rc;
 }
@@ -2327,11 +1986,6 @@ static int msm_eeprom_platform_remove(struct platform_device *pdev)
 		pr_err("%s: eeprom device is NULL\n", __func__);
 		return 0;
 	}
-
-	msm_camera_put_clk_info(e_ctrl->pdev,
-		&e_ctrl->eboard_info->power_info.clk_info,
-		&e_ctrl->eboard_info->power_info.clk_ptr,
-		e_ctrl->eboard_info->power_info.clk_info_size);
 
 	kfree(e_ctrl->i2c_client.cci_client);
 	kfree(e_ctrl->cal_data.mapdata);
@@ -2358,14 +2012,12 @@ static const struct of_device_id msm_eeprom_i2c_dt_match[] = {
 
 MODULE_DEVICE_TABLE(of, msm_eeprom_i2c_dt_match);
 
-
 static struct platform_driver msm_eeprom_platform_driver = {
 	.driver = {
 		.name = "qcom,eeprom",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_eeprom_dt_match,
 	},
-	.probe = msm_eeprom_platform_probe,
 	.remove = msm_eeprom_platform_remove,
 };
 
@@ -2387,7 +2039,7 @@ static struct i2c_driver msm_eeprom_i2c_driver = {
 
 static struct spi_driver msm_eeprom_spi_driver = {
 	.driver = {
-		.name = "qcom_eeprom",
+		.name = "qcom,eeprom",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_eeprom_dt_match,
 	},
@@ -2397,24 +2049,15 @@ static struct spi_driver msm_eeprom_spi_driver = {
 
 static int __init msm_eeprom_init_module(void)
 {
-	int rc = 0, spi_rc = 0;
+	int rc = 0;
 	CDBG("%s E\n", __func__);
-	rc = platform_driver_register(&msm_eeprom_platform_driver);
+	rc = platform_driver_probe(&msm_eeprom_platform_driver,
+		msm_eeprom_platform_probe);
 	CDBG("%s:%d platform rc %d\n", __func__, __LINE__, rc);
-
-	spi_rc = spi_register_driver(&msm_eeprom_spi_driver);
-	CDBG("%s:%d spi rc %d\n", __func__, __LINE__, spi_rc);
-	rc = i2c_add_driver(&msm_eeprom_i2c_driver);
-	CDBG("%s:%d i2c rc %d\n", __func__, __LINE__, rc);
-
-	if (rc < 0 && spi_rc < 0)
-		pr_err("%s:%d probe failed\n", __func__, __LINE__);
-	else
-		pr_info("%s:%d probe succeed\n", __func__, __LINE__);
-
-	return rc;
+	rc = spi_register_driver(&msm_eeprom_spi_driver);
+	CDBG("%s:%d spi rc %d\n", __func__, __LINE__, rc);
+	return i2c_add_driver(&msm_eeprom_i2c_driver);
 }
-
 
 static void __exit msm_eeprom_exit_module(void)
 {

@@ -88,8 +88,6 @@ struct msm_sensor_ctrl_t {
 	enum msm_camera_stream_type_t camera_stream_type;
 	uint32_t set_mclk_23880000;
 	uint8_t is_csid_tg_mode;
-	uint32_t is_secure;
-	uint8_t bypass_video_node_creation;
 };
 
 #if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
@@ -101,7 +99,8 @@ struct msm_sensor_ctrl_t {
 
 #define CAM_HW_ERR_CNT_FILE_PATH "/data/camera/camera_hw_err_cnt.dat"
 
-typedef enum {
+typedef enum
+{
 	HW_PARAMS_CREATED = 0,
 	HW_PARAMS_NOT_CREATED,
 } hw_params_check_type;
@@ -115,7 +114,7 @@ struct cam_hw_param {
 	u32 mipi_comp_err_cnt;
 	u16 i2c_chk;
 	u16 mipi_chk;
-    u16 comp_chk;
+	u16 comp_chk;
 	u16 need_update_to_file;
 } __attribute__((__packed__));
 

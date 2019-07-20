@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -39,12 +39,6 @@ static struct pm_qos_request msm_v4l2_pm_qos_request;
 
 static struct msm_queue_head *msm_session_q;
 
-/* This variable represent daemon status
- * true = daemon present (default state)
- * false = daemon is NOT present
- */
-bool is_daemon_status = true;
-
 /* config node envent queue */
 static struct v4l2_fh  *msm_eventq;
 spinlock_t msm_eventq_lock;
@@ -61,7 +55,7 @@ spinlock_t msm_pid_lock;
 #define msm_dequeue(queue, type, member) ({				\
 	unsigned long flags;					\
 	struct msm_queue_head *__q = (queue);			\
-	type *node = 0;				\
+	type *node = NULL;				\
 	spin_lock_irqsave(&__q->lock, flags);			\
 	if (!list_empty(&__q->list)) {				\
 		__q->len--;					\
@@ -275,7 +269,7 @@ void msm_delete_stream(unsigned int session_id, unsigned int stream_id)
 {
 	struct msm_session *session = NULL;
 	struct msm_stream  *stream = NULL;
-	unsigned long flags;
+	unsigned long flags, wl_flags;
 	int try_count = 0;
 
 	session = msm_queue_find(msm_session_q, struct msm_session,
@@ -285,7 +279,6 @@ void msm_delete_stream(unsigned int session_id, unsigned int stream_id)
 		return;
 
 	while (1) {
-		unsigned long wl_flags;
 
 		if (try_count > 5) {
 			pr_err("%s : not able to delete stream %d\n",
@@ -299,14 +292,12 @@ void msm_delete_stream(unsigned int session_id, unsigned int stream_id)
 			list, __msm_queue_find_stream, &stream_id);
 
 		if (!stream) {
-			write_unlock_irqrestore(&session->stream_rwlock,
-				wl_flags);
+			write_unlock_irqrestore(&session->stream_rwlock, wl_flags);
 			return;
 		}
 
 		if (msm_vb2_get_stream_state(stream) != 1) {
-			write_unlock_irqrestore(&session->stream_rwlock,
-				wl_flags);
+			write_unlock_irqrestore(&session->stream_rwlock, wl_flags);
 			continue;
 		}
 
@@ -386,6 +377,11 @@ static void msm_add_sd_in_position(struct msm_sd_subdev *msm_subdev,
 	struct msm_sd_subdev *temp_sd;
 
 	list_for_each_entry(temp_sd, sd_list, list) {
+		if (temp_sd == msm_subdev) {
+			pr_err("%s :Fail to add the same sd %d\n",
+				__func__, __LINE__);
+			return;
+		}
 		if (msm_subdev->close_seq < temp_sd->close_seq) {
 			list_add_tail(&msm_subdev->list, &temp_sd->list);
 			return;
@@ -714,13 +710,8 @@ static long msm_private_ioctl(struct file *file, void *fh,
 	unsigned int stream_id;
 	unsigned long spin_flags = 0;
 	struct msm_sd_subdev *msm_sd;
-
-	if (cmd == MSM_CAM_V4L2_IOCTL_DAEMON_DISABLED) {
-		is_daemon_status = false;
-		return 0;
-	}
-
-    switch (cmd) {
+       
+        switch (cmd) {
 	case MSM_CAM_V4L2_IOCTL_NOTIFY:
 	case MSM_CAM_V4L2_IOCTL_CMD_ACK:
         case MSM_CAM_V4L2_IOCTL_NOTIFY_DEBUG:
@@ -730,10 +721,6 @@ static long msm_private_ioctl(struct file *file, void *fh,
 		return -ENOTTY;
 	}
 
-	if (!event_data)
-		return -EINVAL;
-
-	memset(&event, 0, sizeof(struct v4l2_event));
 	session_id = event_data->session_id;
 	stream_id = event_data->stream_id;
 
@@ -1172,34 +1159,6 @@ struct msm_session *msm_get_session_from_vb2q(struct vb2_queue *q)
 	return NULL;
 }
 EXPORT_SYMBOL(msm_get_session_from_vb2q);
-
-
-#ifdef CONFIG_COMPAT
-long msm_copy_camera_private_ioctl_args(unsigned long arg,
-	struct msm_camera_private_ioctl_arg *k_ioctl,
-	void __user **tmp_compat_ioctl_ptr)
-{
-	struct msm_camera_private_ioctl_arg up_ioctl;
-
-	if (WARN_ON(!arg || !k_ioctl || !tmp_compat_ioctl_ptr))
-		return -EIO;
-
-	if (copy_from_user(&up_ioctl,
-		(struct msm_camera_private_ioctl_arg *)arg,
-		sizeof(struct msm_camera_private_ioctl_arg)))
-		return -EFAULT;
-
-	k_ioctl->id = up_ioctl.id;
-	k_ioctl->size = up_ioctl.size;
-	k_ioctl->result = up_ioctl.result;
-	k_ioctl->reserved = up_ioctl.reserved;
-	*tmp_compat_ioctl_ptr = compat_ptr(up_ioctl.ioctl_ptr);
-
-	return 0;
-}
-EXPORT_SYMBOL(msm_copy_camera_private_ioctl_args);
-#endif
-
 static void msm_sd_notify(struct v4l2_subdev *sd,
 	unsigned int notification, void *arg)
 {
@@ -1306,7 +1265,7 @@ static int msm_probe(struct platform_device *pdev)
 	if (WARN_ON(rc < 0))
 		goto media_fail;
 
-	if (WARN_ON((rc = media_entity_init(&pvdev->vdev->entity,
+	if (WARN_ON((rc == media_entity_init(&pvdev->vdev->entity,
 			0, NULL, 0)) < 0))
 		goto entity_fail;
 

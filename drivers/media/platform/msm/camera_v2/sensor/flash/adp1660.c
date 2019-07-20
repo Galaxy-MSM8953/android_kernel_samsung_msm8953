@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -55,6 +55,7 @@ static struct msm_camera_i2c_reg_array adp1660_high_array[] = {
 static void __exit msm_flash_adp1660_i2c_remove(void)
 {
 	i2c_del_driver(&adp1660_i2c_driver);
+	return;
 }
 
 static const struct of_device_id adp1660_trigger_dt_match[] = {
@@ -99,9 +100,7 @@ static struct i2c_driver adp1660_i2c_driver = {
 static int msm_flash_adp1660_platform_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *match;
-
 	match = of_match_device(adp1660_trigger_dt_match, &pdev->dev);
-
 	if (!match)
 		return -EFAULT;
 	return msm_flash_probe(pdev, match->data);
@@ -121,12 +120,13 @@ static int __init msm_flash_adp1660_init_module(void)
 	int32_t rc = 0;
 
 	rc = platform_driver_register(&adp1660_platform_driver);
-
-	if (fctrl.pdev != NULL && rc == 0)
+	if (fctrl.pdev != NULL && rc == 0) {
 		pr_err("adp1660 platform_driver_register success");
-	else if (rc != 0)
+		return rc;
+	} else if (rc != 0) {
 		pr_err("adp1660 platform_driver_register failed");
-	else {
+		return rc;
+	} else {
 		rc = i2c_add_driver(&adp1660_i2c_driver);
 		if (!rc)
 			pr_err("adp1660 i2c_add_driver success");

@@ -9,8 +9,8 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#ifndef MSM_OTP_H
-#define MSM_OTP_H
+#ifndef MSM_EEPROM_H
+#define MSM_EEPROM_H
 
 #include <linux/i2c.h>
 #include <linux/gpio.h>
@@ -35,7 +35,7 @@ struct msm_eeprom_ctrl_t;
 #define r_otp_cmd        0x0102
 #define r_otp_wdata      0x0106
 #define r_otp_rdata      0x0108
-#define START_ADDR_FOR_S5K5E3_OTP 0xA04
+ #define START_ADDR_FOR_S5K5E3_OTP 0xA04
 struct msm_eeprom_ctrl_t {
 	struct platform_device *pdev;
 	struct mutex *eeprom_mutex;

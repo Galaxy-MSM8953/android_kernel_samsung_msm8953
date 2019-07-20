@@ -103,7 +103,7 @@ static int cpp_get_clk_freq_tbl(struct clk *clk, struct cpp_hw_info *hw_info,
 
 int msm_cpp_set_micro_clk(struct cpp_device *cpp_dev)
 {
-	uint32_t msm_micro_iface_idx;
+	int msm_micro_iface_idx;
 	int rc;
 
 	msm_micro_iface_idx = msm_cpp_get_clock_index(cpp_dev,
@@ -148,7 +148,7 @@ int msm_cpp_set_micro_clk(struct cpp_device *cpp_dev)
 
 int msm_update_freq_tbl(struct cpp_device *cpp_dev)
 {
-	uint32_t msm_cpp_core_clk_idx;
+	int msm_cpp_core_clk_idx;
 	int rc = 0;
 
 	msm_cpp_core_clk_idx = msm_cpp_get_clock_index(cpp_dev, "cpp_core_clk");
