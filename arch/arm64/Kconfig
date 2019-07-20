@@ -357,6 +357,98 @@ config ARCH_MSM8994_V1_TLBI_WA
 	  [39:38] bits of VA are tied to zero and due to which TLBI
 	  operations with VA or ASID will not work.
 
+config SEC_MSM8953LTE_CHN
+	bool "Enable Support for Samsung MSM8953 LTE CHN device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung MSM8953 LTE CHN device.
+
+config SEC_C7LTE_CHN
+	bool "Enable Support for Samsung C7 LTE CHN device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung C7 LTE CHN device.
+	  
+config SEC_C5PROLTE_CHN
+	bool "Enable Support for Samsung C5PRO LTE CHN device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung C5PRO LTE CHN device.	  
+
+config SEC_C7LTE_CHN_LDU
+	bool "Enable Support for Samsung C7 LTE CHN LDU device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung C7 LTE CHN LDU device.
+
+config SEC_C7LTE_CHN_HK
+	bool "Enable Support for Samsung C7 LTE CHN HK device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung C7 LTE CHN HK device.
+
+config SEC_C7LTE_KOR_SKT
+	bool "Enable Support for Samsung C7 LTE KOR SKT device."
+	depends on ARCH_MSMTITANIUM
+	help
+	  This enables support for Samsung C7 LTE KOR SKT device.
+
+config SEC_C7PROLTE_CHN
+	bool "Enable Support for Samsung C7pro LTE CHN device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung C7pro LTE CHN device.
+
+config SEC_C7PROLTE_HK
+	bool "Enable Support for Samsung C7pro LTE HK device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung C7pro LTE HK device.
+	  
+config SEC_C7PROLTE_SWA
+	bool "Enable Support for Samsung C7pro LTE SWA device."
+	depends on ARCH_MSM8953
+	help
+	  This enables support for Samsung C7pro LTE SWA device.
+	  
+config SEC_ON7XLTE_CHN
+	bool "Enable Support for Samsung On7x LTE CHN device."
+	depends on ARCH_MSM8953
+	select PROC_TASK_STATE_CHN_ORDER
+	help
+	  This enables support for Samsung On7x LTE CHN device.
+
+config SEC_GTAXLQLTE_USA_SPR
+	bool "Enable Support for Samsung GTAXLQ LTE USA SPR device."
+	depends on ARCH_MSM8953
+	help
+	  This enables support for Samsung GTAXLQ LTE USA SPR device.
+
+config SEC_J7POPLTE_USA_VZW
+	bool "Enable Support for Samsung J7POP LTE USA VZW device."
+	depends on ARCH_MSM8953
+	help
+	  This enables support for Samsung J7POP LTE USA VZW device.
+
+config SEC_J7POPLTE_USA_SPR
+	bool "Enable Support for Samsung J7POP LTE USA SPR device."
+	depends on ARCH_MSM8953
+	help
+	  This enables support for Samsung J7POP LTE USA SPR device.
+
+config SEC_J7POPLTE_USA_USC
+	bool "Enable Support for Samsung J7POP LTE USA USC device."
+	depends on ARCH_MSM8953
+	help
+	  This enables support for Samsung J7POP LTE USA USC device.
+
 endmenu
 
 config SAMSUNG_PRODUCT_SHIP
