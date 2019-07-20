@@ -10,10 +10,10 @@
 #define _VIBRATOR_H
 
 #define MOTOR_STRENGTH		96
-#define CLK_M			3
-#define CLK_N			137
-#define CLK_D			68
-#define CLK_STD			137
+#define GP_CLK_M_DEFAULT			3
+#define GP_CLK_N_DEFAULT            137
+#define GP_CLK_D_DEFAULT			68  /* 50% duty cycle */
+#define IMM_PWM_MULTIPLIER			137
 #define VIB_DEFAULT_TIMEOUT	10000
 #define BASE_REGISTER_NUM	6
 
@@ -28,6 +28,15 @@
 #define NO_INTENSITY_VOLTAGE		0		/* Voltage 0V*/
 
 #define MASK_VALUE		0xffffffff
+
+/*
+ * ** Global variables for LRA PWM M,N and D values.
+ * */
+int32_t g_nlra_gp_clk_m = GP_CLK_M_DEFAULT;
+int32_t g_nlra_gp_clk_n = GP_CLK_N_DEFAULT;
+int32_t g_nlra_gp_clk_d = GP_CLK_D_DEFAULT;
+int32_t g_nlra_gp_clk_pwm_mul = IMM_PWM_MULTIPLIER;
+int32_t motor_strength = MOTOR_STRENGTH;
 
 #define out_dword_masked_ns(io, mask, val, current_reg_content) \
 	(void) iowrite32(\

@@ -9,7 +9,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
+#include <linux/clk.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/err.h>
@@ -27,9 +27,9 @@
 #include "vibrator.h"
 
 struct msm_vib {
+	struct device *dev;
 	struct hrtimer vib_timer;
 	struct timed_output_dev timed_dev;
-	struct device *dev;
 	struct work_struct work;
 	struct workqueue_struct *queue;
 	int state;
@@ -39,9 +39,16 @@ struct msm_vib {
 	struct mutex lock;
 	u32 vdd_type;
 	int intensity;
+	unsigned int m_default;
+	unsigned int n_default;
+	unsigned int motor_strength;
 	struct regulator *vdd;
 	struct wake_lock wklock;
+	struct clk *motor_clk;
+	bool motor_enable_state;
 };
+#define CLK_RATE 100000000
+
 #ifdef CONFIG_DC_MOTOR_PMIC
 static int vib_volt;
 #endif
@@ -54,29 +61,29 @@ static void vibe_write_reg(void __iomem *addr,
 			ioread32(addr) & MASK_VALUE);
 }
 
-static void vibe_set_pwm_freq(int enable)
+static void vibe_set_pwm_freq(int intensity)
 {
 	int32_t calc_d;
 
 	vibe_write_reg(gp_addr[CFG_RCGR], 0x700, 0 << 8);
 	vibe_write_reg(gp_addr[CFG_RCGR], 0x1f, 31 << 0);
 	vibe_write_reg(gp_addr[CFG_RCGR], 0x3000, 2 << 12);
-	vibe_write_reg(gp_addr[GP_M], 0xff, CLK_M << 0);
+	vibe_write_reg(gp_addr[GP_M], 0xff, g_nlra_gp_clk_m << 0);
 
-	if (enable) {
-		calc_d = CLK_N - (CLK_STD >> 8);
-		calc_d = calc_d * MOTOR_STRENGTH / 100;
+	if (intensity > 0) {
+		calc_d = g_nlra_gp_clk_n - ((intensity * g_nlra_gp_clk_pwm_mul) >> 8);
+		calc_d = calc_d * motor_strength / 100;
 		if (calc_d < min_strength)
 			calc_d = min_strength;
 	} else {
-		calc_d = CLK_D;
-		if (CLK_N - calc_d > CLK_N * MOTOR_STRENGTH / 100)
-			calc_d = CLK_N - CLK_N * MOTOR_STRENGTH / 100;
+		calc_d = ((intensity * g_nlra_gp_clk_pwm_mul) >> 8) + g_nlra_gp_clk_d;
+		if (g_nlra_gp_clk_n - calc_d > g_nlra_gp_clk_n * motor_strength / 100)
+			calc_d = g_nlra_gp_clk_n - g_nlra_gp_clk_n * motor_strength / 100;
 	}
 
 	vibe_write_reg(gp_addr[GP_D], 0xff,
 			(~((int16_t)calc_d << 1)) << 0);
-	vibe_write_reg(gp_addr[GP_N], 0xff, ~(CLK_N - CLK_M) << 0);
+	vibe_write_reg(gp_addr[GP_N], 0xff, ~(g_nlra_gp_clk_n - g_nlra_gp_clk_m) << 0);
 
 }
 
@@ -111,8 +118,19 @@ static void vibe_set_intensity(int intensity)
 	}
 #else
 
-	if (intensity)
+	int temp;
+
+	pr_info("[VIB] set vib intensity = %d\n",intensity);
+
+	if (intensity) {
+		if (intensity >= MAX_INTENSITY)
+			intensity = 1;
+		else {
+			temp = MAX_INTENSITY - intensity;
+			intensity = (temp / 79);
+		}
 		vibe_set_pwm_freq(intensity);
+	}
 
 	vibe_pwm_onoff(intensity);
 #endif
@@ -125,27 +143,11 @@ static void set_vibrator(struct msm_vib *vib, int enable)
 	struct pinctrl *vib_pinctrl;
 
 	if (vib->motor_pwm) {
-		vibe_set_intensity(enable);
 		gpio_set_value(vib->motor_pwm, enable);
 	}
 
-	if (!vib->vdd_type) {
-		if (enable) {
-			vib_pinctrl = devm_pinctrl_get_select(vib->dev, "tlmm_motor_active");
-			if (IS_ERR(vib_pinctrl)) {
-				pr_debug("Target does not use pinctrl\n");
-				gpio_set_value(vib->motor_en, enable);
-				vib_pinctrl = NULL;
-			}
-		} else {
-			vib_pinctrl = devm_pinctrl_get_select(vib->dev, "tlmm_motor_suspend");
-			if (IS_ERR(vib_pinctrl)) {
-				pr_debug("Target does not use pinctrl\n");
-				gpio_set_value(vib->motor_en, enable);
-				vib_pinctrl = NULL;
-			}
-		}
-	}
+	if (!vib->vdd_type)
+		gpio_set_value(vib->motor_en, enable);
 	else {
 		if (enable) {
 			if (!regulator_is_enabled(vib->vdd)) {
@@ -172,10 +174,46 @@ static void set_vibrator(struct msm_vib *vib, int enable)
 		}
 	}
 
-	if (enable)
+	if (enable){
 		wake_lock(&vib->wklock);
-	else
+		if (vib->motor_en || vib->motor_pwm) {
+			vib_pinctrl = devm_pinctrl_get_select(vib->dev, "tlmm_motor_active");
+			if (IS_ERR(vib_pinctrl)) {
+				if (PTR_ERR(vib_pinctrl) == -EPROBE_DEFER)
+					pr_err("[VIB]: Error %d\n", -EPROBE_DEFER);
+				pr_debug("Target does not use pinctrl\n");
+				vib_pinctrl = NULL;
+			}
+			if (vib->motor_pwm) {
+				if(vib->motor_enable_state == false){
+					ret = clk_prepare_enable(vib->motor_clk);
+					if (ret < 0) {
+						pr_err("[VIB]: Error cannot enable motor_clk %d\n", ret);
+						return;
+					}
+					vib->motor_enable_state = true;
+				}
+			}
+		}
+	}
+	else{
+		if (vib->motor_en || vib->motor_pwm) {
+			vib_pinctrl = devm_pinctrl_get_select(vib->dev, "tlmm_motor_suspend");
+			if (IS_ERR(vib_pinctrl)) {
+				if (PTR_ERR(vib_pinctrl) == -EPROBE_DEFER)
+					pr_err("[VIB]: Error %d\n", -EPROBE_DEFER);
+				pr_debug("Target does not use pinctrl\n");
+				vib_pinctrl = NULL;
+			}
+			if (vib->motor_pwm) {
+				if(vib->motor_enable_state == true){
+					vib->motor_enable_state = false;
+					clk_disable_unprepare(vib->motor_clk);
+				}
+			}
+		}
 		wake_unlock(&vib->wklock);
+	}
 	pr_info("[VIB] is %s\n",
 			enable ? "enabled": "disabled");
 
@@ -305,10 +343,99 @@ static ssize_t show_dc_pmic(struct device *dev,
 static DEVICE_ATTR(dc_pmic, S_IWUSR | S_IRUGO | S_IWGRP, show_dc_pmic, NULL);
 #endif
 
+#ifdef CONFIG_OF
+static int vib_parse_dt(struct device *dev, struct msm_vib *vib)
+{
+	int ret;
+	unsigned int gp_clk;
+	struct device_node *np = dev->of_node;
+
+	ret = of_property_read_u32(np, "motor-vdd_type", &vib->vdd_type);
+	if (!vib->vdd_type)
+		vib->motor_en = of_get_named_gpio(np, "motor-en", 0);
+	else {
+		vib->vdd = regulator_get(dev, "vibr_vdd");
+		if (IS_ERR(vib->vdd)) {
+			pr_err("[VIB] failed to get regulator\n");
+			return -EINVAL;
+		}
+	}
+
+	vib->motor_pwm = of_get_named_gpio(np, "motor-pwm", 0);
+	if (vib->motor_pwm <= 0)
+		vib->motor_pwm = 0;
+	else {
+		ret = of_property_read_u32(np, "gp_clk", &gp_clk);
+		if (ret) {
+			pr_err("[VIB] failed to get gp_clk address\n");
+			gp_clk = 0x01854000; /* default: gp0_clk */
+		}
+		virt_mmss_gp1_base = ioremap(gp_clk, 0x28);
+		set_pwm_register();
+	}
+
+	if (!vib->vdd_type) {
+		pr_info("[VIB] motor_en: %d motor_pwm: %d\n",
+					vib->motor_en, vib->motor_pwm);
+		if (!gpio_is_valid(vib->motor_en)) {
+			pr_err("%s: failed to get en gpio\n", __func__);
+			return -EINVAL;
+		}
+		if (gpio_request(vib->motor_en, "motor_en")) {
+			pr_err("%s: motor_en request failed\n", __func__);
+			return -EINVAL;
+		}
+        gpio_direction_output(vib->motor_en, 0);
+	}
+
+	if (vib->motor_pwm > 0) {
+		if (gpio_request(vib->motor_pwm, "motor_pwm")) {
+			pr_err("%s: motor_pwm request failed\n", __func__);
+			return -EINVAL;
+		}
+		if (!of_find_property(np, "clock-names", NULL)) {
+			pr_err("%s: cannot get clock-names \n",__func__);
+		} else {
+			pr_info("%s: get motor-clk \n",__func__);
+			vib->motor_clk = clk_get(vib->dev, "motor-clk");
+			if (IS_ERR(vib->motor_clk)) {
+				pr_err("%s: clk get %s failed\n", __func__, "motor_clk");
+				return -EINVAL;
+			}
+		}
+	}
+
+	ret = of_property_read_u32(np, "m_default", &vib->m_default);
+	if (ret) {
+		pr_err("m_default not specified so using default address\n");
+		vib->m_default = GP_CLK_M_DEFAULT;
+	}
+
+	ret = of_property_read_u32(np, "n_default", &vib->n_default);
+	if (ret) {
+		pr_err("n_default not specified so using default address\n");
+		vib->n_default = GP_CLK_N_DEFAULT;
+	}
+	g_nlra_gp_clk_m = vib->m_default;
+	g_nlra_gp_clk_n = vib->n_default;
+	g_nlra_gp_clk_d = (vib->n_default)/2;
+	g_nlra_gp_clk_pwm_mul = vib->n_default;
+
+	ret = of_property_read_u32(np, "motor_strength",
+							&vib->motor_strength);
+	if (ret) {
+		pr_err("motor_strength not specified so using default address\n");
+		vib->motor_strength = MOTOR_STRENGTH;
+	}
+	motor_strength = vib->motor_strength;
+
+	return 0;
+}
+#endif /* CONFIG_OF */
+
 static int msm_vibrator_probe(struct platform_device *pdev)
 {
 	struct msm_vib *vib;
-	struct pinctrl *vib_pinctrl;
 #ifdef CONFIG_DC_MOTOR_PMIC
 	struct device *vib_dev;
 #endif
@@ -319,65 +446,21 @@ static int msm_vibrator_probe(struct platform_device *pdev)
 		pr_err("%s : Failed to allocate memory\n", __func__);
 		return -ENOMEM;
 	}
-
-        vib->dev = &pdev->dev;
-
-	rc = of_property_read_u32(pdev->dev.of_node, "motor-vdd_type", &vib->vdd_type);
-	if (!vib->vdd_type)
-		vib->motor_en = of_get_named_gpio(pdev->dev.of_node, "motor-en", 0);
-	else {
-		vib->vdd = regulator_get(&pdev->dev, "vibr_vdd");
-		if (IS_ERR(vib->vdd)) {
-			pr_err("[VIB] failed to get regulator\n");
-			return -EINVAL;
-		}
+	
+	vib->dev = &pdev->dev;
+	
+#ifdef CONFIG_OF
+	rc = vib_parse_dt(&pdev->dev, vib);
+	if (rc < 0) {
+		pr_err("[VIB] failed to parse dt\n");
+		return -EINVAL;
 	}
-
-	vib->motor_pwm = of_get_named_gpio(pdev->dev.of_node, "motor-pwm", 0);
-	if (vib->motor_pwm <= 0)
-		vib->motor_pwm = 0;
-	else {
-		virt_mmss_gp1_base = ioremap(0x01854000, 0x28);
-		set_pwm_register();
-	}
-
-	if (!vib->vdd_type) {
-		pr_info("[VIB] motor_en: %d motor_pwm: %d\n",
-					vib->motor_en, vib->motor_pwm);
-		if (!gpio_is_valid(vib->motor_en)) {
-			pr_err("%s:%d, reset gpio not specified\n",
-					__func__, __LINE__);
-			return -EINVAL;
-		}
-		gpio_direction_output(vib->motor_en, 0);
-
-		if (gpio_request(vib->motor_en, "motor_en")) {
-			pr_err("%s:%d, request not specified\n",
-					__func__, __LINE__);
-			return -EINVAL;
-		}
-	}
-
-	if (vib->motor_pwm > 0) {
-		if (gpio_request(vib->motor_pwm, "motor_pwm")) {
-			pr_err("%s:%d, request not specified\n",
-					__func__, __LINE__);
-			return -EINVAL;
-		}
-	}
-
-	if (vib->motor_en || vib->motor_pwm) {
-		vib_pinctrl = devm_pinctrl_get_select(vib->dev, "tlmm_motor_suspend");
-		if (IS_ERR(vib_pinctrl)) {
-			if (PTR_ERR(vib_pinctrl) == -EPROBE_DEFER)
-				return -EPROBE_DEFER;
-			pr_debug("Target does not use pinctrl\n");
-			vib_pinctrl = NULL;
-		}
-	}
+#endif
 
 	vib->timeout = VIB_DEFAULT_TIMEOUT;
 	if (vib->motor_pwm) {
+		vib->motor_enable_state = false;
+		clk_set_rate(vib->motor_clk,CLK_RATE);
 		vib->intensity = MAX_INTENSITY;
 		vibe_set_intensity(vib->intensity);
 	}
