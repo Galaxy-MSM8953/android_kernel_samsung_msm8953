@@ -146,6 +146,33 @@ struct p61_dev {
 /* T==1 protocol specific global data */
 const unsigned char SOF = 0xA5u;
 
+/* Qcom Factory spi immediate pinctrl */
+int ese_spi_pinctrl(int enable)
+{
+	int ret = 0;
+//#ifndef CONFIG_ESE_SECURE temp
+	pr_info("%s [%d]\n", __func__, enable);
+#if 0 //temp
+	switch (enable) {
+	case 0:
+		ret = ese_spi_free_gpios(p61_dev->spi);
+		if (ret < 0)
+			pr_err("%s: couldn't config spi gpio\n", __func__);
+		break;
+	case 1:
+		ret = ese_spi_request_gpios(p61_dev->spi);
+		if (ret < 0)
+			pr_err("%s: couldn't config spi gpio\n", __func__);
+		break;
+	default:
+		pr_err("%s no matching!\n", __func__);
+		ret = -EINVAL;
+	}
+#endif
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ese_spi_pinctrl);
+
 #ifdef CONFIG_ESE_SECURE
 /**
  * p61_spi_clk_max_rate: finds the nearest lower rate for a clk
