@@ -481,7 +481,7 @@ static ssize_t yas_sw_reset_show(struct device *dev,
 		data->mag.set_enable(1);
 		data->mag.set_delay(data->poll_delay);
 		hrtimer_start(&data->mag_timer, data->delay,
-						HRTIMER);
+						HRTIMER_MODE_REL);
 	} else {
 		data->mag.set_enable(0);
 	}
