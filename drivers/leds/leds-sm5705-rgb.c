@@ -58,6 +58,15 @@ enum tft_color {
 	RED,
 	OTHER,
 };
+#elif defined(CONFIG_SEC_C5PROLTE_CHN) || defined(CONFIG_SEC_C7PROLTE_CHN)
+enum octa_color {
+	BLACK = 1,
+	WHITE,
+	GOLD,
+	BLUE = 6,
+	OTHER,
+	RED,
+};
 #else
 enum octa_color {
 	BLACK = 0,
@@ -92,6 +101,9 @@ static u32 low_powermode_current;
 static u32 br_ratio_r;
 static u32 br_ratio_g;
 static u32 br_ratio_b;
+static u32 br_ratio_r_low;
+static u32 br_ratio_g_low;
+static u32 br_ratio_b_low;
 
 static int gpio_vdd;
 
@@ -402,7 +414,7 @@ out:
 static ssize_t show_sm5705_rgb_lowpower(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
-	struct sm5705_rgb *sm5705_rgb = dev_get_drvdata(dev->parent);
+	struct sm5705_rgb *sm5705_rgb = dev_get_drvdata(dev);
 
 	return snprintf(buf, LED_MAX_STR, "%d\n", sm5705_rgb->en_lowpower_mode);
 }
@@ -423,6 +435,31 @@ static ssize_t store_sm5705_rgb_lowpower(struct device *dev, struct device_attri
 out:
 	return count;
 }
+
+static unsigned char calc_led_current_from_lowpower_brightness(struct sm5705_rgb *sm5705_rgb, int index, unsigned char brightness)
+{
+	unsigned char cur_value;
+
+	cur_value = low_powermode_current * brightness / LED_MAX_CURRENT;
+
+	if (!cur_value) { cur_value = 1; }
+
+	switch (index) {
+	case LED_R:
+		cur_value = (cur_value * br_ratio_r_low) / 100;
+		break;
+	case LED_G:
+		cur_value = (cur_value * br_ratio_g_low) / 100;
+		break;
+	case LED_B:
+		cur_value = (cur_value * br_ratio_b_low) / 100;
+		break;
+	}
+	if (!cur_value) { cur_value = 1; }
+
+	return cur_value;
+}
+
 
 static unsigned char calc_led_current_from_brightness(struct sm5705_rgb *sm5705_rgb, int index, unsigned char brightness)
 {
@@ -473,7 +510,10 @@ static ssize_t store_sm5705_rgb_blink(struct device *dev,
 
 	for (i=0; i < LED_MAX; ++i) {
 		if (led_br[i]) {
-			led_current = calc_led_current_from_brightness(sm5705_rgb, i, led_br[i]);
+			if (sm5705_rgb->en_lowpower_mode)
+				led_current = calc_led_current_from_lowpower_brightness(sm5705_rgb, i, led_br[i]);
+			else
+				led_current = calc_led_current_from_brightness(sm5705_rgb, i, led_br[i]);
 			sm5705_rgb_set_LEDx_slopeduty(sm5705_rgb, i, 0xF, 0xF, 0x0);
 			sm5705_rgb_set_LEDx_slopemode(sm5705_rgb, i, 0,
 						sm5705_rgb->delay_on_times_ms,
@@ -493,6 +533,9 @@ static ssize_t store_sm5705_rgb_pattern(struct device *dev,
 {
 	struct sm5705_rgb *sm5705_rgb = dev_get_drvdata(dev);
 	unsigned char led_current;
+	u32 current_br_ratio_r;
+	u32 current_br_ratio_g;
+	u32 current_br_ratio_b;
 	unsigned int mode;
 	int ret;
 
@@ -505,6 +548,17 @@ static ssize_t store_sm5705_rgb_pattern(struct device *dev,
 
 	dev_info(dev, "%s: pattern mode=%d led_current=0x%x(lowpower=%d)\n", __func__, mode, led_current, sm5705_rgb->en_lowpower_mode);
 
+	if(sm5705_rgb->en_lowpower_mode){
+		current_br_ratio_r=br_ratio_r_low;
+		current_br_ratio_g=br_ratio_g_low;
+		current_br_ratio_b=br_ratio_b_low;
+		}
+	else{
+		current_br_ratio_r=br_ratio_r;
+		current_br_ratio_g=br_ratio_g;
+		current_br_ratio_b=br_ratio_b;
+		}
+		
 	ret = sm5705_rgb_reset(sm5705_rgb);
 	if (IS_ERR_VALUE(ret)) {
 		goto out;
@@ -513,13 +567,13 @@ static ssize_t store_sm5705_rgb_pattern(struct device *dev,
 	switch (mode) {
 	case CHARGING:
 		/* LED_R constant mode ON */
-		led_current = (led_current * br_ratio_r) / CURRENT_RATIO;
+		led_current = (led_current * current_br_ratio_r) / CURRENT_RATIO;
 		sm5705_rgb_set_LEDx_current(sm5705_rgb, LED_R, led_current);
 		sm5705_rgb_set_LEDx_enable(sm5705_rgb, LED_R, 0, 1);
 		break;
 	case CHARGING_ERR:
 		/* LED_R slope mode ON (500ms to 500ms) */
-		led_current = (led_current * br_ratio_r) / CURRENT_RATIO;
+		led_current = (led_current * current_br_ratio_r) / CURRENT_RATIO;
 		sm5705_rgb_set_LEDx_slopeduty(sm5705_rgb, LED_R, 0xF, 0xF, 0x0);
 		sm5705_rgb_set_LEDx_slopemode(sm5705_rgb, LED_R, 0, 500, 500, 4, 4);
 		sm5705_rgb_set_LEDx_current(sm5705_rgb, LED_R, led_current);
@@ -527,7 +581,7 @@ static ssize_t store_sm5705_rgb_pattern(struct device *dev,
 		break;
 	case MISSED_NOTI:
 		/* LED_B slope mode ON (500ms to 5000ms) */
-		led_current = (led_current * br_ratio_b) / CURRENT_RATIO;
+		led_current = (led_current * current_br_ratio_b) / CURRENT_RATIO;
 		sm5705_rgb_set_LEDx_slopeduty(sm5705_rgb, LED_B, 0xF, 0xF, 0x0);
 		sm5705_rgb_set_LEDx_slopemode(sm5705_rgb, LED_B, 0, 500, 5000, 4, 4);
 		sm5705_rgb_set_LEDx_current(sm5705_rgb, LED_B, led_current);
@@ -535,7 +589,7 @@ static ssize_t store_sm5705_rgb_pattern(struct device *dev,
 		break;
 	case LOW_BATTERY:
 		/* LED_R slope mode ON (500ms to 5000ms) */
-		led_current = (led_current * br_ratio_r) / CURRENT_RATIO;
+		led_current = (led_current * current_br_ratio_r) / CURRENT_RATIO;
 		sm5705_rgb_set_LEDx_slopeduty(sm5705_rgb, LED_R, 0xF, 0xF, 0x0);
 		sm5705_rgb_set_LEDx_slopemode(sm5705_rgb, LED_R, 0, 500, 5000, 4, 4);
 		sm5705_rgb_set_LEDx_current(sm5705_rgb, LED_R, led_current);
@@ -543,7 +597,7 @@ static ssize_t store_sm5705_rgb_pattern(struct device *dev,
 		break;
 	case FULLY_CHARGED:
 		/* LED_G constant mode ON */
-		led_current = (led_current * br_ratio_g) / CURRENT_RATIO;
+		led_current = (led_current * current_br_ratio_g) / CURRENT_RATIO;
 		sm5705_rgb_set_LEDx_current(sm5705_rgb, LED_G, led_current);
 		sm5705_rgb_set_LEDx_enable(sm5705_rgb, LED_G, 0, 1);
 		break;
@@ -551,11 +605,11 @@ static ssize_t store_sm5705_rgb_pattern(struct device *dev,
 		/* LED_G & LED_B slope mode ON (1000ms to 1000ms) */
 		sm5705_rgb_set_LEDx_slopeduty(sm5705_rgb, LED_G, 0x8, 0x4, 0x1);
 		sm5705_rgb_set_LEDx_slopemode(sm5705_rgb, LED_G, 0, 1000, 1000, 12, 12);
-		led_current = (led_current * br_ratio_g) / CURRENT_RATIO;
+		led_current = (led_current * current_br_ratio_g) / CURRENT_RATIO;
 		sm5705_rgb_set_LEDx_current(sm5705_rgb, LED_G, led_current);
 		sm5705_rgb_set_LEDx_slopeduty(sm5705_rgb, LED_B, 0xF, 0xE, 0xC);
 		sm5705_rgb_set_LEDx_slopemode(sm5705_rgb, LED_B, 0, 1000, 1000, 28, 28);
-		led_current = led_current * br_ratio_b / br_ratio_g;
+		led_current = led_current * current_br_ratio_b / current_br_ratio_g;
 		sm5705_rgb_set_LEDx_current(sm5705_rgb, LED_B, led_current);
 		sm5705_rgb_set_LEDx_enable(sm5705_rgb, LED_G, 1, 1);
 		sm5705_rgb_set_LEDx_enable(sm5705_rgb, LED_B, 1, 1);
@@ -845,6 +899,27 @@ static int sm5705_rgb_parse_dt(struct device *dev)
 		br_ratio_b = 100;
 	}
 
+	make_property_string(property_str, "ratio_r_low", octa);
+	ret = of_property_read_u32(np, property_str, &br_ratio_r_low);
+	if (ret < 0) {
+		dev_err(dev, "%s: failed to get ratio_r_low\n", __func__);
+		br_ratio_r_low = br_ratio_r;
+	}
+
+	make_property_string(property_str, "ratio_g_low", octa);
+	ret = of_property_read_u32(np, property_str, &br_ratio_g_low);
+	if (ret < 0) {
+		dev_err(dev, "%s: failed to get ratio_g_low\n", __func__);
+		br_ratio_g_low = br_ratio_g;
+	}
+	
+	make_property_string(property_str, "ratio_b_low", octa);
+	ret = of_property_read_u32(np, property_str, &br_ratio_b_low);
+	if (ret < 0) {
+		dev_err(dev, "%s: failed to get ratio_b_low\n", __func__);
+		br_ratio_b_low = br_ratio_b;
+	}
+	
 	gpio_vdd = of_get_named_gpio(np, "rgb,vdd-gpio", 0);
 	if (gpio_vdd < 0)
 		dev_info(dev, "don't support gpio to lift up power supply!\n");
@@ -926,6 +1001,7 @@ static int sm5705_rgb_probe(struct platform_device *pdev)
 #endif
 	sm5705_rgb->dev = dev;
 	sm5705_rgb->i2c = sm5705_dev->i2c;
+	sm5705_rgb->en_lowpower_mode = 0;
 	platform_set_drvdata(pdev, sm5705_rgb);
 
 	for (ret = 0 ; ret < LED_MAX ; ret++)
@@ -959,6 +1035,7 @@ static int sm5705_rgb_probe(struct platform_device *pdev)
 	dev_info(dev, "normal_powermode_current: 0x%x\n", normal_powermode_current);
 	dev_info(dev, "low_powermode_current: 0x%x\n", low_powermode_current);
 	dev_info(dev, "ratio R,G,B = (%d,%d,%d)\n", br_ratio_r, br_ratio_g, br_ratio_b);
+	dev_info(dev, "low_powermode ratio R,G,B = (%d,%d,%d)\n", br_ratio_r_low, br_ratio_g_low, br_ratio_b_low);
 
 	return 0;
 

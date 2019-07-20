@@ -68,6 +68,12 @@ FlashlightLevelInfo calibData[MAX_FLASHLIGHT_LEVEL] = {
 	{1004, 70},
 	{1006, 110},
 	{1009, 140}
+#elif defined(CONFIG_SEC_C5PROLTE_CHN) || defined(CONFIG_SEC_C7PROLTE_CHN) || defined(CONFIG_SEC_C7PROLTE_SWA) || defined(CONFIG_SEC_C7LTE_CHN) || defined(CONFIG_SEC_C7LTE_CHN_HK) || defined(CONFIG_SEC_ON7XLTE_CHN)
+	{1001, 20},
+	{1002, 30},
+	{1004, 50},
+	{1006, 70},
+	{1009, 100}
 #else  //default case
 	{1001, 20},
 	{1002, 40},
@@ -560,6 +566,8 @@ int sm5705_fled_flash_on_set_current(unsigned char index, int32_t flash_current_
 {
 	if (assistive_light[index] == false) {
 		dev_info(g_sm5705_fled->dev, "%s: Flash setted by user- ON\n", __func__);
+        if( flash_current_mA <= 0 )
+            flash_current_mA = g_sm5705_fled->pdata->led[index].flash_current_mA;
 		sm5705_fled_turn_on_flash(g_sm5705_fled, index, (unsigned short) flash_current_mA);
 	}
 
@@ -993,12 +1001,14 @@ static int sm5705_fled_parse_dt(struct sm5705_dev *sm5705, struct sm5705_fled_pl
 		}
 		pdata->led[index].flash_current_mA = temp;
 
+#if !defined(CONFIG_SEC_C7LTE_CHN) && !defined(CONFIG_SEC_C7LTE_CHN_HK)
 		ret = of_property_read_u32(c_np, "preflash-mode-current-mA", &temp);
 		if (ret) {
 			pr_err("%s: fail to get dt:preflash-mode-current-mA\n", __func__);
 			return ret;
 		}
 		pdata->led[index].preflash_current_mA = temp;
+#endif
 
 		ret = of_property_read_u32(c_np, "torch-mode-current-mA", &temp);
 		if (ret) {
