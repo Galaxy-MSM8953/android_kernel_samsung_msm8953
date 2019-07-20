@@ -198,6 +198,9 @@ obj-$(CONFIG_USE_MUIC)		+= muic/
 # Motor
 obj-y				+= motor/
 
+#Sensorhub
+obj-$(CONFIG_SENSORS_SSP)	+= sensorhub/
+
 ifeq ($(CONFIG_FB_MSM_MDSS_SAMSUNG),y)
 	LINUXINCLUDE	+=  -I$(srctree)/drivers/video/msm/mdss/samsung/
 endif

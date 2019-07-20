@@ -222,4 +222,6 @@ source "drivers/five/Kconfig"
 
 source "drivers/debug/Kconfig"
 
+source "drivers/sensorhub/Kconfig"
+
 endmenu
