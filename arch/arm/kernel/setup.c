@@ -60,6 +60,9 @@
 
 #include "atags.h"
 
+#ifdef CONFIG_SOC_BUS
+extern uint32_t socinfo_get_serial_number(void);
+#endif
 
 #if defined(CONFIG_FPE_NWFPE) || defined(CONFIG_FPE_FASTFPE)
 char fpe_type[8];
@@ -153,9 +156,14 @@ char elf_platform[ELF_PLATFORM_SIZE];
 EXPORT_SYMBOL(elf_platform);
 
 static const char *cpu_name;
-static const char *machine_name;
+const char *machine_name;
 static char __initdata cmd_line[COMMAND_LINE_SIZE];
 const struct machine_desc *machine_desc __initdata;
+
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
+const char *unit_name;
+EXPORT_SYMBOL(unit_name);
+#endif
 
 static union { char c[4]; unsigned long l; } endian_test __initdata = { { 'l', '?', '?', 'b' } };
 #define ENDIANNESS ((char)endian_test.l)
@@ -769,6 +777,14 @@ static int __init early_mem(char *p)
 }
 early_param("mem", early_mem);
 
+static int __init msm_hw_rev_setup(char *p)
+{
+	system_rev = memparse(p, NULL);
+	printk("androidboot.revision %x", system_rev);
+	return 0;
+}
+early_param("androidboot.revision", msm_hw_rev_setup);
+
 static void __init request_standard_resources(const struct machine_desc *mdesc)
 {
 	struct memblock_region *region;
@@ -930,6 +946,10 @@ void __init setup_arch(char **cmdline_p)
 		mdesc = setup_machine_tags(__atags_pointer, __machine_arch_type);
 	machine_desc = mdesc;
 	machine_name = mdesc->name;
+	dump_stack_set_arch_desc("%s (DT)", machine_name);
+#ifdef CONFIG_SEC_DEBUG_SUBSYS
+	unit_name = machine_name;
+#endif
 
 	if (mdesc->reboot_mode != REBOOT_HARD)
 		reboot_mode = mdesc->reboot_mode;
@@ -945,7 +965,9 @@ void __init setup_arch(char **cmdline_p)
 
 	parse_early_param();
 
+	set_memsize_kernel_type(MEMSIZE_KERNEL_PAGING);
 	early_paging_init(mdesc, lookup_processor_type(read_cpuid_id()));
+	set_memsize_kernel_type(MEMSIZE_KERNEL_OTHERS);
 	setup_dma_zone(mdesc);
 	sanity_check_meminfo();
 	arm_memblock_init(mdesc);
@@ -1123,8 +1145,13 @@ static int c_show(struct seq_file *m, void *v)
 	else
 		seq_printf(m, "Hardware\t: %s\n", arch_read_hardware_id());
 	seq_printf(m, "Revision\t: %04x\n", system_rev);
+#ifdef CONFIG_SOC_BUS
+	seq_printf(m, "Serial\t\t: %u\n",
+		   socinfo_get_serial_number());
+#else
 	seq_printf(m, "Serial\t\t: %08x%08x\n",
 		   system_serial_high, system_serial_low);
+#endif
 	seq_printf(m, "Processor\t: %s rev %d (%s)\n",
 		   cpu_name, read_cpuid_id() & 15, elf_platform);
 

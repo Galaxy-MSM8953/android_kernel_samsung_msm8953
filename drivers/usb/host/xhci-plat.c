@@ -218,6 +218,9 @@ static int xhci_plat_probe(struct platform_device *pdev)
 	if ((node && of_property_read_bool(node, "usb3-lpm-capable")) ||
 			(pdata && pdata->usb3_lpm_capable))
 		xhci->quirks |= XHCI_LPM_SUPPORT;
+#ifdef CONFIG_USB_HOST_L1_SUPPORT
+	xhci->quirks |= XHCI_LPM_L1_SUPPORT;
+#endif
 
 	hcd_to_bus(xhci->shared_hcd)->skip_resume = true;
 	/*

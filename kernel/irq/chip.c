@@ -20,7 +20,7 @@
 #include <trace/events/irq.h>
 
 #include "internals.h"
-
+#include <linux/sec_debug.h>
 /**
  *	irq_set_chip - set the irq chip for an irq
  *	@irq:	irq number
@@ -746,9 +746,11 @@ bool handle_percpu_devid_irq(unsigned int irq, struct irq_desc *desc)
 	if (chip->irq_ack)
 		chip->irq_ack(&desc->irq_data);
 
+	sec_debug_irq_sched_log(irq, action->handler, (char *)action->name, IRQ_ENTRY);
 	trace_irq_handler_entry(irq, action);
 	res = action->handler(irq, dev_id);
 	trace_irq_handler_exit(irq, action, res);
+	sec_debug_irq_sched_log(irq, action->handler, (char *)action->name, IRQ_EXIT);
 
 	if (chip->irq_eoi)
 		chip->irq_eoi(&desc->irq_data);

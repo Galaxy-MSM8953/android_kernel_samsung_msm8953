@@ -14,6 +14,9 @@
 #define MSM_SENSOR_INIT_H
 
 #include "msm_sensor.h"
+#include "msm_eeprom.h"
+
+#define CAMERA_INFO_MAXSIZE 150
 
 struct msm_sensor_init_t {
 	struct mutex imutex;

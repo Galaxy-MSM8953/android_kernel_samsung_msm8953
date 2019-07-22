@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -841,7 +841,7 @@ static irqreturn_t msm_cpp_irq(int irq_num, void *data)
 		} else {
 			pr_err("Fatal invalid tx level %d", tx_level);
 			goto err;
-		}
+ 		}
 		spin_lock_irqsave(&cpp_dev->tasklet_lock, flags);
 		queue_cmd = &cpp_dev->tasklet_queue_cmd[cpp_dev->taskletq_idx];
 		if (queue_cmd->cmd_used) {

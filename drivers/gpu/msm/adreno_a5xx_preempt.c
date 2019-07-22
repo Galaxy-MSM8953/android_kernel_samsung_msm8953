@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -49,6 +49,18 @@ static void _update_wptr(struct adreno_device *adreno_dev, bool reset_timer)
 	spin_unlock_irqrestore(&rb->preempt_lock, flags);
 }
 
+static inline bool _check_busy(struct adreno_ringbuffer *rb)
+{
+	bool empty;
+	unsigned long flags;
+
+	spin_lock_irqsave(&rb->preempt_lock, flags);
+	empty = adreno_rb_empty(rb);
+	spin_unlock_irqrestore(&rb->preempt_lock, flags);
+
+	return !empty;
+}
+
 static inline bool adreno_move_preempt_state(struct adreno_device *adreno_dev,
 	enum adreno_preempt_states old, enum adreno_preempt_states new)
 {
@@ -94,6 +106,14 @@ static void _a5xx_preemption_done(struct adreno_device *adreno_dev)
 	adreno_dev->prev_rb = adreno_dev->cur_rb;
 	adreno_dev->cur_rb = adreno_dev->next_rb;
 	adreno_dev->next_rb = NULL;
+
+	/*
+	 * If there were comands pending on the previous ringbuffer then set a
+	 * timer to make sure we get back to it.
+	 */
+	if (_check_busy(adreno_dev->prev_rb))
+		mod_timer(&adreno_dev->prev_rb->timer, jiffies +
+			msecs_to_jiffies(adreno_dispatch_starvation_time));
 
 	/* Update the wptr for the new command queue */
 	_update_wptr(adreno_dev, true);
@@ -173,22 +193,65 @@ static void _a5xx_preemption_timer(unsigned long data)
 static struct adreno_ringbuffer *a5xx_next_ringbuffer(
 		struct adreno_device *adreno_dev)
 {
-	struct adreno_ringbuffer *rb;
-	unsigned long flags;
+	struct adreno_ringbuffer *rb, *next = NULL;
 	unsigned int i;
+	unsigned int bit;
 
-	FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
-		bool empty;
+	/*
+	 * Pickup highest priority starved rb if any.
+	 */
+	bit = ffs(adreno_dev->preempt.starved);
 
-		spin_lock_irqsave(&rb->preempt_lock, flags);
-		empty = adreno_rb_empty(rb);
-		spin_unlock_irqrestore(&rb->preempt_lock, flags);
+	while (bit != 0) {
+		rb = &adreno_dev->ringbuffers[bit - 1];
 
-		if (empty == false)
+		if (_check_busy(rb)) {
+			/*
+			 * If the current RB is already starved and
+			 * it has not been running for the minimum time slice
+			 * then allow it to run.
+			 */
+			if ((adreno_dev->cur_rb->sched_timer != 0) &&
+				(time_before(jiffies,
+					adreno_dev->cur_rb->sched_timer +
+					msecs_to_jiffies(
+					adreno_dispatch_time_slice))))
+				return adreno_dev->cur_rb;
+
+			rb->sched_timer = jiffies;
 			return rb;
+		}
+
+		/*
+		 * Clear the bit if rb is not really busy.
+		 */
+		clear_bit(rb->id, &adreno_dev->preempt.starved);
+
+		bit = ffs(adreno_dev->preempt.starved);
 	}
 
-	return NULL;
+	/* Now find the highest priority busy ringbuffer */
+	FOR_EACH_RINGBUFFER(adreno_dev, rb, i) {
+		if (_check_busy(rb) && next == NULL) {
+			next = rb;
+			continue;
+		}
+
+		if (rb->sched_timer != 0) {
+			/*
+			 * If the RB has not been running for the minimum
+			 * time slice then allow it to run.
+			 */
+			if (_check_busy(rb) && time_before(jiffies,
+				rb->sched_timer +
+				msecs_to_jiffies(adreno_dispatch_time_slice)))
+				next = rb;
+			else
+				rb->sched_timer = 0;
+		}
+	}
+
+	return next;
 }
 
 void a5xx_preemption_trigger(struct adreno_device *adreno_dev)
@@ -231,6 +294,10 @@ void a5xx_preemption_trigger(struct adreno_device *adreno_dev)
 
 	/* Turn off the dispatcher timer */
 	del_timer(&adreno_dev->dispatcher.timer);
+
+	/* Turn off the starvation timer for the new ringbuffer */
+	del_timer(&next->timer);
+	clear_bit(next->id, &adreno_dev->preempt.starved);
 
 	/*
 	 * This is the most critical section - we need to take care not to race
@@ -275,6 +342,24 @@ void a5xx_preemption_trigger(struct adreno_device *adreno_dev)
 	adreno_writereg(adreno_dev, ADRENO_REG_CP_PREEMPT, 1);
 }
 
+static void _a5xx_starvation_timer(unsigned long data)
+{
+
+	struct adreno_ringbuffer *rb = (struct adreno_ringbuffer *) data;
+	struct adreno_device *adreno_dev = ADRENO_RB_DEVICE(rb);
+
+	/*
+	 * Add safe check to make sure ringbuffer is indeed busy.
+	 */
+	if (!_check_busy(rb))
+		return;
+
+	set_bit(rb->id, &adreno_dev->preempt.starved);
+
+	a5xx_preemption_trigger(adreno_dev);
+
+}
+
 void a5xx_preempt_callback(struct adreno_device *adreno_dev, int bit)
 {
 	unsigned int status;
@@ -308,6 +393,15 @@ void a5xx_preempt_callback(struct adreno_device *adreno_dev, int bit)
 	adreno_dev->prev_rb = adreno_dev->cur_rb;
 	adreno_dev->cur_rb = adreno_dev->next_rb;
 	adreno_dev->next_rb = NULL;
+
+	/*
+	 * If there were comands pending on the previous ringbuffer then set a
+	 * timer to make sure we get back to it
+	 */
+
+	if (_check_busy(adreno_dev->prev_rb))
+		mod_timer(&adreno_dev->prev_rb->timer, jiffies +
+			msecs_to_jiffies(adreno_dispatch_starvation_time));
 
 	/* Update the wptr if it changed while preemption was ongoing */
 	_update_wptr(adreno_dev, true);
@@ -523,6 +617,8 @@ static int a5xx_preemption_ringbuffer_init(struct adreno_device *adreno_dev,
 	kgsl_sharedmem_writeq(device, &rb->preemption_desc,
 		PREEMPT_RECORD(counter), counteraddr);
 
+	setup_timer(&rb->timer, _a5xx_starvation_timer,
+		(unsigned long) rb);
 	return 0;
 }
 

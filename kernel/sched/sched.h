@@ -1077,6 +1077,7 @@ static inline bool is_min_capacity_cpu(int cpu)
 	return cpu_max_possible_capacity(cpu) == min_max_possible_capacity;
 }
 
+
 /*
  * 'load' is in reference to "best cpu" at its best frequency.
  * Scale that in reference to a given cpu, accounting for how bad it is

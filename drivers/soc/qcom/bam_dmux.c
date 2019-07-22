@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2016, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2016, 2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -231,7 +231,7 @@ static struct srcu_struct bam_dmux_srcu;
 /* A2 power collaspe */
 #define UL_TIMEOUT_DELAY 1000	/* in ms */
 #define UL_FAST_TIMEOUT_DELAY 100 /* in ms */
-#define SHUTDOWN_TIMEOUT_MS	500
+#define SHUTDOWN_TIMEOUT_MS	2000
 #define UL_WAKEUP_TIMEOUT_MS	2000
 static uint32_t ul_timeout_delay = UL_TIMEOUT_DELAY;
 static void toggle_apps_ack(void);
@@ -2305,7 +2305,9 @@ static int bam_init(void)
 	a2_props.virt_addr = a2_virt_addr;
 	a2_props.virt_size = a2_phys_size;
 	a2_props.irq = a2_bam_irq;
-	a2_props.options = SPS_BAM_OPT_IRQ_WAKEUP | SPS_BAM_HOLD_MEM;
+	a2_props.options = SPS_BAM_OPT_IRQ_WAKEUP
+				| SPS_BAM_HOLD_MEM
+				| SPS_BAM_OPT_IRQ_NO_SUSPEND;
 	a2_props.num_pipes = A2_NUM_PIPES;
 	a2_props.summing_threshold = A2_SUMMING_THRESHOLD;
 	a2_props.constrained_logging = true;

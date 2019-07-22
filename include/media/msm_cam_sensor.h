@@ -87,11 +87,16 @@ struct msm_ir_cut_cfg_data_t32 {
 struct eeprom_read_t32 {
 	compat_uptr_t dbuffer;
 	uint32_t num_bytes;
+	uint32_t addr;
+	uint32_t comp_size;
 };
 
 struct eeprom_write_t32 {
 	compat_uptr_t dbuffer;
 	uint32_t num_bytes;
+	uint32_t addr;
+	compat_uptr_t write_size;
+	uint8_t compress;
 };
 
 struct msm_eeprom_info_t32 {
@@ -102,7 +107,7 @@ struct msm_eeprom_info_t32 {
 
 struct msm_eeprom_cfg_data32 {
 	enum eeprom_cfg_type_t cfgtype;
-	uint8_t is_supported;
+	uint16_t is_supported;
 	union {
 		char eeprom_name[MAX_SENSOR_NAME];
 		struct eeprom_get_t get_data;
@@ -245,6 +250,7 @@ struct msm_flash_cfg_data_t32 {
 		compat_uptr_t flash_init_info;
 		compat_uptr_t settings;
 	} cfg;
+	enum flash_position_t flash_position;
 };
 
 #define VIDIOC_MSM_ACTUATOR_CFG32 \

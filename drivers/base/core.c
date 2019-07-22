@@ -452,7 +452,7 @@ static ssize_t online_store(struct device *dev, struct device_attribute *attr,
 	unlock_device_hotplug();
 	return ret < 0 ? ret : count;
 }
-static DEVICE_ATTR_RW(online);
+static DEVICE_ATTR(online, S_IWUSR | S_IRUGO | S_IWGRP, online_show, online_store);
 
 int device_add_groups(struct device *dev, const struct attribute_group **groups)
 {

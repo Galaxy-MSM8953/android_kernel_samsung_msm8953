@@ -25,7 +25,9 @@ enum android_function_index {
 	ANDROID_ECM_BAM,
 	ANDROID_AUDIO,
 	ANDROID_RMNET,
+#ifndef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	ANDROID_GPS,
+#endif
 	ANDROID_DIAG,
 	ANDROID_QDSS_BAM,
 	ANDROID_SERIAL,
@@ -41,7 +43,9 @@ enum android_function_index {
 	ANDROID_UMS,
 	ANDROID_ACCESSORY,
 	ANDROID_AUDIO_SRC,
+#ifndef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	ANDROID_CHARGER,
+#endif
 	ANDROID_MIDI,
 	ANDROID_RNDIS_GSI,
 	ANDROID_ECM_GSI,
@@ -67,8 +71,10 @@ static enum android_function_index name_to_func_idx(const char *name)
 		return ANDROID_AUDIO;
 	if (!strncasecmp("RMNET", name, FUNC_NAME_LEN))
 		return ANDROID_RMNET;
+#ifndef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	if (!strncasecmp("GPS", name, FUNC_NAME_LEN))
 		return ANDROID_GPS;
+#endif
 	if (!strncasecmp("DIAG", name, FUNC_NAME_LEN))
 		return ANDROID_DIAG;
 	if (!strncasecmp("QDSS", name, FUNC_NAME_LEN))
@@ -100,7 +106,7 @@ static enum android_function_index name_to_func_idx(const char *name)
 	if (!strncasecmp("AUDIO_SOURCE", name, FUNC_NAME_LEN))
 		return ANDROID_AUDIO_SRC;
 	if (!strncasecmp("CHARGING", name, FUNC_NAME_LEN))
-		return ANDROID_CHARGER;
+		return ANDROID_AUDIO_SRC;
 	if (!strncasecmp("MIDI", name, FUNC_NAME_LEN))
 		return ANDROID_MIDI;
 	if (!strncasecmp("RNDIS_GSI", name, FUNC_NAME_LEN))

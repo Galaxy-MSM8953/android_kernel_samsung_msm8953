@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -55,7 +55,7 @@
 #define VFE_PING_FLAG 0xFFFFFFFF
 #define VFE_PONG_FLAG 0x0
 
-#define VFE_MAX_CFG_TIMEOUT 3000
+#define VFE_MAX_CFG_TIMEOUT 10000
 #define VFE_CLK_INFO_MAX 16
 #define STATS_COMP_BIT_MASK 0x1FF
 
@@ -703,11 +703,6 @@ struct msm_vfe_common_subdev {
 	struct msm_vfe_common_dev_data *common_data;
 };
 
-struct isp_proc {
-	uint32_t  kernel_sofid;
-	uint32_t  vfeid;
-};
-
 struct vfe_device {
 	/* Driver private data */
 	struct platform_device *pdev;
@@ -741,7 +736,7 @@ struct vfe_device {
 	spinlock_t shared_data_lock;
 	spinlock_t reg_update_lock;
 	spinlock_t reset_completion_lock;
-	spinlock_t halt_completion_lock;
+        spinlock_t halt_completion_lock;
 	spinlock_t tasklet_lock;
 
 	/* Tasklet info */
@@ -795,7 +790,6 @@ struct vfe_device {
 	/* Store the buf_idx for pd stats RDI stream */
 	uint8_t pd_buf_idx;
 	uint32_t ms_frame_id;
-	struct isp_proc *isp_page;
 };
 
 struct vfe_parent_device {

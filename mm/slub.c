@@ -699,7 +699,7 @@ void object_err(struct kmem_cache *s, struct page *page,
 	slab_panic(reason);
 }
 
-static void slab_err(struct kmem_cache *s, struct page *page,
+static __printf(3, 4) void slab_err(struct kmem_cache *s, struct page *page,
 			const char *fmt, ...)
 {
 	va_list args;
@@ -925,12 +925,12 @@ static int check_slab(struct kmem_cache *s, struct page *page)
 	maxobj = order_objects(compound_order(page), s->size, s->reserved);
 	if (page->objects > maxobj) {
 		slab_err(s, page, "objects %u > max %u",
-			s->name, page->objects, maxobj);
+			page->objects, maxobj);
 		return 0;
 	}
 	if (page->inuse > page->objects) {
 		slab_err(s, page, "inuse %u > max %u",
-			s->name, page->inuse, page->objects);
+			page->inuse, page->objects);
 		return 0;
 	}
 	/* Slab_pad_check fixes things up after itself */
@@ -947,7 +947,7 @@ static int on_freelist(struct kmem_cache *s, struct page *page, void *search)
 	int nr = 0;
 	void *fp;
 	void *object = NULL;
-	unsigned long max_objects;
+	int max_objects;
 
 	fp = page->freelist;
 	while (fp && nr <= page->objects) {
@@ -1250,8 +1250,16 @@ unsigned long kmem_cache_flags(unsigned long object_size,
 	 * Enable debugging if selected on the kernel commandline.
 	 */
 	if (slub_debug && (!slub_debug_slabs || (name &&
-		!strncmp(slub_debug_slabs, name, strlen(slub_debug_slabs)))))
+		!strncmp(slub_debug_slabs, name, strlen(slub_debug_slabs))))) {
 		flags |= slub_debug;
+
+		if (name && 
+			(!strncmp(name, "zspage", strlen("zspage")) ||
+			!strncmp(name, "zs_handle", strlen("zs_handle")) ||
+			!strncmp(name, "zswap_entry", strlen("zswap_entry")) ||
+			!strncmp(name, "avtab_node", strlen("avtab_node"))))
+			flags &= ~SLAB_STORE_USER;
+	}
 
 	return flags;
 }

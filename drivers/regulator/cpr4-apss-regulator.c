@@ -521,6 +521,10 @@ static int cpr4_msm8953_apss_calculate_open_loop_voltages(
 			  fuse_volt[i]);
 	}
 
+#ifdef CONFIG_SEC_AP_HEALTH
+	cpr3_save_fused_open_loop_voltage(vreg, fuse_volt);
+#endif
+
 	rc = cpr3_adjust_fused_open_loop_voltages(vreg, fuse_volt);
 	if (rc) {
 		cpr3_err(vreg, "fused open-loop voltage adjustment failed, rc=%d\n",
@@ -909,17 +913,17 @@ static void cpr4_apss_print_settings(struct cpr3_regulator *vreg)
 	struct cpr3_corner *corner;
 	int i;
 
-	cpr3_debug(vreg, "Corner: Frequency (Hz), Fuse Corner, Floor (uV), Open-Loop (uV), Ceiling (uV)\n");
+	cpr3_info(vreg, "Corner: Frequency (Hz), Fuse Corner, Floor (uV), Open-Loop (uV), Ceiling (uV)\n");
 	for (i = 0; i < vreg->corner_count; i++) {
 		corner = &vreg->corner[i];
-		cpr3_debug(vreg, "%3d: %10u, %2d, %7d, %7d, %7d\n",
+		cpr3_info(vreg, "%3d: %10u, %2d, %7d, %7d, %7d\n",
 			i, corner->proc_freq, corner->cpr_fuse_corner,
 			corner->floor_volt, corner->open_loop_volt,
 			corner->ceiling_volt);
 	}
 
 	if (vreg->thread->ctrl->apm)
-		cpr3_debug(vreg, "APM threshold = %d uV, APM adjust = %d uV\n",
+		cpr3_info(vreg, "APM threshold = %d uV, APM adjust = %d uV\n",
 			vreg->thread->ctrl->apm_threshold_volt,
 			vreg->thread->ctrl->apm_adj_volt);
 }

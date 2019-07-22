@@ -28,7 +28,7 @@
 #define CMDQUEUE_NEXT(_i, _s) (((_i) + 1) % (_s))
 
 /* Time in ms after which the dispatcher tries to schedule an unscheduled RB */
-unsigned int adreno_dispatch_starvation_time = 2000;
+unsigned int adreno_dispatch_starvation_time = 1000;
 
 /* Amount of time in ms that a starved RB is permitted to execute for */
 unsigned int adreno_dispatch_time_slice = 25;

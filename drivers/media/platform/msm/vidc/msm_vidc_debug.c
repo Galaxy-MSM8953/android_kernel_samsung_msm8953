@@ -22,7 +22,11 @@ int msm_vidc_debug_out = VIDC_OUT_PRINTK;
 int msm_vidc_fw_debug = 0x18;
 int msm_vidc_fw_debug_mode = 1;
 int msm_vidc_fw_low_power_mode = 1;
+#if defined(CONFIG_SEC_J4CORELTE_PROJECT)//Temp increase timeout to 5 sec(unable to get contiguous memory in 1 sec)
+int msm_vidc_hw_rsp_timeout = 5000;
+#else
 int msm_vidc_hw_rsp_timeout = 1000;
+#endif	
 int msm_vidc_fw_coverage = 0;
 int msm_vidc_dec_dcvs_mode = 1;
 int msm_vidc_enc_dcvs_mode = 1;

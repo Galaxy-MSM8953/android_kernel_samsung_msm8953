@@ -51,6 +51,10 @@ int msm_camera_init_gpio_pin_tbl(struct device_node *of_node,
 int msm_camera_get_dt_vreg_data(struct device_node *of_node,
 	struct camera_vreg_t **cam_vreg, int *num_vreg);
 
+#if defined(CONFIG_CAMERA_SYSFS_V2)
+int msm_camera_get_dt_camera_info(struct device_node *of_node, char *buf);
+#endif
+
 int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 	enum msm_camera_device_type_t device_type,
 	struct msm_camera_i2c_client *sensor_i2c_client);

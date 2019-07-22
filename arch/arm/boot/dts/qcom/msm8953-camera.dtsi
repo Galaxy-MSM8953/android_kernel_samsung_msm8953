@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,6 +35,7 @@
 			<&clock_gcc clk_csi0phytimer_clk_src>,
 			<&clock_gcc clk_gcc_camss_csi0phytimer_clk>,
 			<&clock_gcc clk_camss_top_ahb_clk_src>,
+			<&clock_gcc clk_gcc_camss_csi0phy_clk>,
 			<&clock_gcc clk_gcc_camss_ahb_clk>;
 		clock-names = "camss_top_ahb_clk", "ispif_ahb_clk",
 			"csiphy_timer_src_clk", "csiphy_timer_clk",
@@ -56,6 +57,7 @@
 			<&clock_gcc clk_csi1phytimer_clk_src>,
 			<&clock_gcc clk_gcc_camss_csi1phytimer_clk>,
 			<&clock_gcc clk_camss_top_ahb_clk_src>,
+			<&clock_gcc clk_gcc_camss_csi1phy_clk>,
 			<&clock_gcc clk_gcc_camss_ahb_clk>;
 		clock-names = "camss_top_ahb_clk", "ispif_ahb_clk",
 			"csiphy_timer_src_clk", "csiphy_timer_clk",
@@ -77,6 +79,7 @@
 			<&clock_gcc clk_csi2phytimer_clk_src>,
 			<&clock_gcc clk_gcc_camss_csi2phytimer_clk>,
 			<&clock_gcc clk_camss_top_ahb_clk_src>,
+			<&clock_gcc clk_gcc_camss_csi2phy_clk>,
 			<&clock_gcc clk_gcc_camss_ahb_clk>;
 		clock-names = "camss_top_ahb_clk", "ispif_ahb_clk",
 			"csiphy_timer_src_clk", "csiphy_timer_clk",
@@ -108,7 +111,7 @@
 			"csi0_phy_clk",
 			"csi_clk",  "csi_pix_clk",
 			"csi_rdi_clk", "camss_ahb_clk";
-		qcom,clock-rates = <0 61540000 0 200000000 0 0 0 0 0>;
+		qcom,clock-rates = <0 61540000 0 310000000 0 0 0 0 0>;
 	};
 
 	qcom,csid@1b30400 {
@@ -135,7 +138,7 @@
 			"csi1_phy_clk",
 			"csi_clk", "csi_pix_clk",
 			"csi_rdi_clk", "camss_ahb_clk";
-		qcom,clock-rates = <0 61540000 0 200000000 0 0 0 0 0>;
+		qcom,clock-rates = <0 61540000 0 310000000 0 0 0 0 0>;
 	};
 
 	qcom,csid@1b30800 {
@@ -162,7 +165,7 @@
 			"csi2_phy_clk",
 			"csi_clk", "csi_pix_clk",
 			"csi_rdi_clk", "camss_ahb_clk";
-		qcom,clock-rates = <0 61540000 0 200000000 0 0 0 0 0>;
+		qcom,clock-rates = <0 61540000 0 310000000 0 0 0 0 0>;
 	};
 
 	qcom,ispif@1b31000 {
@@ -212,9 +215,9 @@
 			"camss_csi_vfe0_clk", "vfe1_clk_src",
 			"camss_vfe_vfe1_clk", "camss_csi_vfe1_clk";
 		qcom,clock-rates = <61540000 0 0 0
-			200000000 0 0 0
-			200000000 0 0 0
-			200000000 0 0 0
+			310000000 0 0 0
+			310000000 0 0 0
+			310000000 0 0 0
 			0 0 0
 			0 0 0>;
 		qcom,clock-cntl-support;
@@ -243,21 +246,20 @@
 			<&clock_gcc clk_gcc_camss_vfe0_clk>,
 			<&clock_gcc clk_gcc_camss_csi_vfe0_clk>,
 			<&clock_gcc clk_gcc_camss_vfe_ahb_clk>,
-			<&clock_gcc clk_gcc_camss_vfe_axi_clk>,
-			<&clock_gcc clk_gcc_camss_ispif_ahb_clk>;
+			<&clock_gcc clk_gcc_camss_vfe_axi_clk>; 
 		clock-names = "camss_top_ahb_clk", "camss_ahb_clk",
 			"vfe_clk_src", "camss_vfe_vfe_clk",
 			"camss_csi_vfe_clk", "iface_clk",
-			"bus_clk", "iface_ahb_clk";
-		qcom,clock-rates = <0 0 266670000 0 0 0 0 0>;
-		qos-entries = <8>;
+			"bus_clk"; 
+			qcom,clock-rates = <0 0 266670000 0 0 0 0>; 
+			qos-entries = <7>; 
 		qos-regs = <0x2c4 0x2c8 0x2cc 0x2d0 0x2d4 0x2d8
-			0x2dc 0x2e0>;
+			0x2dc>; 
 		qos-settings = <0xaa55aa55
 			0xaa55aa55	0xaa55aa55
 			0xaa55aa55	0xaa55aa55
 			0xaa55aa55	0xaa55aa55
-			0xaa55aa55>;
+			>; 
 		vbif-entries = <1>;
 		vbif-regs = <0x124>;
 		vbif-settings = <0x3>;
@@ -293,21 +295,20 @@
 			<&clock_gcc clk_gcc_camss_vfe1_clk>,
 			<&clock_gcc clk_gcc_camss_csi_vfe1_clk>,
 			<&clock_gcc clk_gcc_camss_vfe1_ahb_clk>,
-			<&clock_gcc clk_gcc_camss_vfe1_axi_clk>,
-			<&clock_gcc clk_gcc_camss_ispif_ahb_clk>;
+			<&clock_gcc clk_gcc_camss_vfe1_axi_clk>; 
 		clock-names = "camss_top_ahb_clk" , "camss_ahb_clk",
 			"vfe_clk_src", "camss_vfe_vfe_clk",
 			"camss_csi_vfe_clk", "iface_clk",
-			"bus_clk", "iface_ahb_clk";
-		qcom,clock-rates = <0 0 266670000 0 0 0 0 0>;
-		qos-entries = <8>;
+			"bus_clk"; 
+			qcom,clock-rates = <0 0 266670000 0 0 0 0>; 
+			qos-entries = <7>; 
 		qos-regs = <0x2c4 0x2c8 0x2cc 0x2d0 0x2d4 0x2d8
-			0x2dc 0x2e0>;
+			0x2dc>;
 		qos-settings = <0xaa55aa55
 			0xaa55aa55	0xaa55aa55
 			0xaa55aa55	0xaa55aa55
 			0xaa55aa55	0xaa55aa55
-			0xaa55aa55>;
+			>;
 		vbif-entries = <1>;
 		vbif-regs = <0x124>;
 		vbif-settings = <0x3>;

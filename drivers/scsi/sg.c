@@ -1069,6 +1069,7 @@ sg_ioctl(struct file *filp, unsigned int cmd_in, unsigned long arg)
 				return -EBUSY;
 			}
 
+			mutex_lock(&sfp->parentdp->open_rel_lock);
 			sg_remove_scat(sfp, &sfp->reserve);
 			sg_build_reserve(sfp, val);
 			mutex_unlock(&sfp->parentdp->open_rel_lock);
@@ -2242,6 +2243,7 @@ sg_add_sfp(Sg_device * sdp)
 	write_lock_irqsave(&sdp->sfd_lock, iflags);
 	if (atomic_read(&sdp->detaching)) {
 		write_unlock_irqrestore(&sdp->sfd_lock, iflags);
+		kfree(sfp);
 		return ERR_PTR(-ENODEV);
 	}
 	list_add_tail(&sfp->sfd_siblings, &sdp->sfds);

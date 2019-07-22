@@ -1696,6 +1696,7 @@ enum actuator_type {
 	ACTUATOR_PIEZO,
 	ACTUATOR_HVCM,
 	ACTUATOR_BIVCM,
+	ACTUATOR_HALL_EFFECT,
 };
 
 enum msm_actuator_data_type {

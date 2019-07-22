@@ -285,6 +285,10 @@ config WCNSS_CORE_PRONTO
 	---help---
 	  Pronto Support for the Qualcomm WCNSS triple play connectivity subsystem
 
+config WLAN_USE_OLD_NV
+	int "use WCNSS_qcom_wlan_nv_old.bin for revision detecion"
+	default 0
+
 config WCNSS_REGISTER_DUMP_ON_BITE
 	bool "Enable/disable WCNSS register dump when there is a WCNSS bite"
 	depends on WCNSS_CORE_PRONTO

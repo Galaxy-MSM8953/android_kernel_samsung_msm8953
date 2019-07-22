@@ -649,11 +649,17 @@ static void socket_read_work_fn(struct work_struct *work)
 						     struct diag_socket_info,
 						     read_work);
 
-	if (!info)
+	if (!info) {
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+		"%s:%d: failure without info\n", __func__, __LINE__);
 		return;
+	}
 
 	if (!atomic_read(&info->opened) && info->port_type == PORT_TYPE_SERVER)
 		diagfwd_buffers_init(info->fwd_ctxt);
+
+	DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+	"%s:%d: issued channel_read for p:%d, t:%d\n", __func__, __LINE__, info->peripheral, info->type);
 
 	diagfwd_channel_read(info->fwd_ctxt);
 }
@@ -666,8 +672,12 @@ static void diag_socket_queue_read(void *ctxt)
 		return;
 
 	info = (struct diag_socket_info *)ctxt;
-	if (info->hdl && info->wq)
+	if (info->hdl && info->wq) {
 		queue_work(info->wq, &(info->read_work));
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+		"%s:%d: queued a read work for p:%d, t:%d\n",
+		__func__, __LINE__, info->peripheral, info->type);
+	}
 }
 
 void diag_socket_invalidate(void *ctxt, struct diagfwd_info *fwd_ctxt)

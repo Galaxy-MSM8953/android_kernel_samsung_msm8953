@@ -34,6 +34,9 @@
 #define MAX_NUMBER_OF_STEPS 47
 #define MAX_REGULATOR 5
 
+/*msm_flash_query_data_t query types*/
+#define FLASH_QUERY_CURRENT 1
+
 #define MSM_V4L2_PIX_FMT_META v4l2_fourcc('M', 'E', 'T', 'A') /* META */
 #define MSM_V4L2_PIX_FMT_META10 v4l2_fourcc('M', 'E', '1', '0') /* META10 */
 #define MSM_V4L2_PIX_FMT_SBGGR14 v4l2_fourcc('B', 'G', '1', '4')
@@ -258,8 +261,18 @@ enum eeprom_cfg_type_t {
 	CFG_EEPROM_GET_CAL_DATA,
 	CFG_EEPROM_READ_CAL_DATA,
 	CFG_EEPROM_WRITE_DATA,
+	CFG_EEPROM_COMPRESS_DATA,
 	CFG_EEPROM_GET_MM_INFO,
 	CFG_EEPROM_INIT,
+	CFG_EEPROM_READ_DATA,
+	CFG_EEPROM_READ_COMPRESSED_DATA,
+	CFG_EEPROM_DECOMPRESS_DATA,
+	CFG_EEPROM_GET_ERASESIZE,
+	CFG_EEPROM_ERASE,
+	CFG_EEPROM_POWER_ON,
+	CFG_EEPROM_POWER_OFF,
+	CFG_EEPROM_READ_DATA_FROM_HW,
+	CFG_EEPROM_GET_FW_VERSION_INFO,
 };
 
 struct eeprom_get_t {
@@ -269,12 +282,23 @@ struct eeprom_get_t {
 struct eeprom_read_t {
 	uint8_t *dbuffer;
 	uint32_t num_bytes;
+	uint32_t addr;
+	uint32_t comp_size;
 };
 
 struct eeprom_write_t {
 	uint8_t *dbuffer;
 	uint32_t num_bytes;
+	uint32_t addr;
+	uint32_t *write_size;
+	uint8_t compress;
 };
+
+struct eeprom_erase_t {
+	uint32_t num_bytes;
+	uint32_t addr;
+};
+
 
 struct eeprom_get_cmm_t {
 	uint32_t cmm_support;
@@ -300,7 +324,7 @@ struct msm_ir_cut_cfg_data_t {
 
 struct msm_eeprom_cfg_data {
 	enum eeprom_cfg_type_t cfgtype;
-	uint8_t is_supported;
+	uint16_t is_supported;
 	union {
 		char eeprom_name[MAX_SENSOR_NAME];
 		struct eeprom_get_t get_data;
@@ -541,6 +565,13 @@ struct msm_flash_cfg_data_t {
 		struct msm_flash_init_info_t *flash_init_info;
 		struct msm_camera_i2c_reg_setting_array *settings;
 	} cfg;
+	enum flash_position_t flash_position;
+};
+
+struct msm_flash_query_data_t {
+	int32_t flags;
+	int32_t query_type;
+	int32_t max_avail_curr;
 };
 
 /* sensor init structures and enums */
@@ -548,6 +579,7 @@ enum msm_sensor_init_cfg_type_t {
 	CFG_SINIT_PROBE,
 	CFG_SINIT_PROBE_DONE,
 	CFG_SINIT_PROBE_WAIT_DONE,
+	CFG_SINIT_HWB,
 };
 
 struct sensor_init_cfg_data {
@@ -597,6 +629,9 @@ struct sensor_init_cfg_data {
 
 #define VIDIOC_MSM_OIS_CFG_DOWNLOAD \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 14, struct msm_ois_cfg_download_data)
+
+#define VIDIOC_MSM_FLASH_QUERY_DATA \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 15, struct msm_flash_query_data_t)
 
 #define VIDIOC_MSM_IR_LED_CFG \
 	_IOWR('V', BASE_VIDIOC_PRIVATE + 15, struct msm_ir_led_cfg_data_t)

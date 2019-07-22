@@ -53,6 +53,11 @@ static ktime_t curr_stime; /* monotonic boottime offset after last suspend */
 static unsigned int time_in_suspend_bins[32];
 #endif
 
+#ifdef CONFIG_SEC_PM
+char last_resume_kernel_reason[512];
+int last_resume_kernel_reason_len;
+#endif
+
 static void init_wakeup_irq_node(struct wakeup_irq_node *p, int irq)
 {
 	p->irq = irq;
@@ -252,8 +257,16 @@ static ssize_t last_resume_reason_show(struct kobject *kobj,
 	spin_lock_irqsave(&resume_reason_lock, flags);
 	if (suspend_abort)
 		b.buf_offset = snprintf(buf, PAGE_SIZE, "Abort: %s", abort_reason);
-	else
+	else {
+#ifdef CONFIG_SEC_PM
+		pr_err("%s: %s(%d)\n", __func__,
+			last_resume_kernel_reason,
+			last_resume_kernel_reason_len);
+		b.buf_offset += sprintf(buf + b.buf_offset, "%d %s\n",
+				0, last_resume_kernel_reason);
+#endif
 		walk_irq_node_tree(base_irq_nodes, print_leaf_node, &b);
+	}
 	spin_unlock_irqrestore(&resume_reason_lock, flags);
 
 	return b.buf_offset;
@@ -559,6 +572,11 @@ static int wakeup_reason_pm_event(struct notifier_block *notifier,
 		/* monotonic time since boot including the time spent in suspend */
 		last_stime = ktime_get_boottime();
 		clear_wakeup_reasons();
+#ifdef CONFIG_SEC_PM
+		/* reset resume kernel reason buffer */
+		last_resume_kernel_reason[0] = '\0';
+		last_resume_kernel_reason_len = 0;
+#endif
 		break;
 	case PM_POST_SUSPEND:
 		/* monotonic time since boot */
@@ -664,6 +682,11 @@ int __init wakeup_reason_init(void)
 	if (!wakeup_irq_nodes_cache)
 		goto fail_remove_group;
 
+#ifdef CONFIG_SEC_PM
+	/* reset resume kernel reason buffer */
+	last_resume_kernel_reason[0] = '\0';
+	last_resume_kernel_reason_len = 0;
+#endif
 	return 0;
 
 fail_remove_group:

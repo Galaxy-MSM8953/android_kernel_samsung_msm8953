@@ -1055,6 +1055,7 @@ config MEMCG_SWAP
 	  if boot option "swapaccount=0" is set, swap will not be accounted.
 	  Now, memory usage of swap_cgroup is 2 bytes per entry. If swap page
 	  size is 4096bytes, 512k per 1Gbytes of swap.
+
 config MEMCG_SWAP_ENABLED
 	bool "Memory Resource Controller Swap Extension enabled by default"
 	depends on MEMCG_SWAP
@@ -1068,6 +1069,12 @@ config MEMCG_SWAP_ENABLED
 	  For those who want to have the feature enabled by default should
 	  select this option (if, for some reason, they need to disable it
 	  then swapaccount=0 does the trick).
+
+config MEMCG_FORCE_USE_VM_SWAPPINESS
+	bool "Force to use vm_swappiness instead of memcg->swappiness"
+	depends on MEMCG_SWAP
+	default y
+
 config MEMCG_KMEM
 	bool "Memory Resource Controller Kernel Memory accounting"
 	depends on MEMCG
@@ -1189,6 +1196,14 @@ config SCHED_HMP
 	  systems made of heterogeneous cpus i.e cpus that differ either
 	  in their instructions per-cycle capability or the maximum
 	  frequency they can attain.
+
+config SEC_ADAPTIVE_LOAD_TRACKING
+	bool "Enables adaptive per task load tracking system"
+	default n
+	help
+	  This option disables Window based load tracking policies and enables 
+	  adaptive load tracking policy. This feature will enhance the demand 
+	  calculation for task. 
 
 config SCHED_HMP_CSTATE_AWARE
 	bool "CPU C-state aware scheduler"

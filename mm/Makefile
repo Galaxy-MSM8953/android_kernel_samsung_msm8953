@@ -40,7 +40,7 @@ obj-y			:= filemap.o mempool.o oom_kill.o \
 			   compaction.o vmacache.o \
 			   interval_tree.o list_lru.o workingset.o \
 			   iov_iter.o debug.o $(mmu-y) showmem.o \
-			   vmpressure.o
+			   vmpressure.o showmem_extra.o
 
 obj-y += init-mm.o
 

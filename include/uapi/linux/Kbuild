@@ -23,6 +23,7 @@ header-y += wimax/
 header-y += ../../../drivers/staging/android/uapi/
 header-y += mfd/
 header-y += nfc/
+header-y += self_display/
 
 genhdr-y += version.h
 

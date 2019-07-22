@@ -18,8 +18,31 @@
 #include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/regulator/consumer.h>
 
+#if !defined(CONFIG_MUIC_UNIVERSAL_SM5705_AFC)
+//#define DISABLE_AFC
+#endif
+
+#ifdef DISABLE_AFC
+extern int sm5705_fled_muic_camera_flash_work_on(void);
+extern int sm5705_fled_muic_camera_flash_work_off(void);
+#endif
+
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+#include <linux/kernel.h>
+#include <linux/syscalls.h>
+#endif
+
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+//#define HWB_FILE_OPERATION 1
+uint32_t sec_sensor_position;
+uint32_t sec_is_securemode;
+uint32_t sec_sensor_clk_size;
+
+static struct cam_hw_param_collector cam_hwparam_collector;
+#endif
+
 #undef CDBG
-#define CDBG(fmt, args...) pr_debug(fmt, ##args)
+#define CDBG(fmt, args...) pr_err(fmt, ##args)
 
 static struct msm_camera_i2c_fn_t msm_sensor_cci_func_tbl;
 static struct msm_camera_i2c_fn_t msm_sensor_secure_func_tbl;
@@ -117,6 +140,9 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 	struct msm_camera_power_ctrl_t *power_info;
 	enum msm_camera_device_type_t sensor_device_type;
 	struct msm_camera_i2c_client *sensor_i2c_client;
+#ifdef DISABLE_AFC
+	uint8_t camera_id = 0;
+#endif
 
 	if (!s_ctrl) {
 		pr_err("%s:%d failed: s_ctrl %pK\n",
@@ -137,6 +163,13 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 		return -EINVAL;
 	}
 
+#ifdef DISABLE_AFC
+	camera_id = s_ctrl->sensordata->sensor_info->position;
+	if (0 == camera_id) {
+		sm5705_fled_muic_camera_flash_work_off();
+	}
+#endif
+
 	/* Power down secure session if it exist*/
 	if (s_ctrl->is_secure)
 		msm_camera_tz_i2c_power_down(sensor_i2c_client);
@@ -154,6 +187,10 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	const char *sensor_name;
 	uint32_t retry = 0;
 
+#ifdef DISABLE_AFC
+	uint8_t  camera_id;
+#endif
+
 	if (!s_ctrl) {
 		pr_err("%s:%d failed: %pK\n",
 			__func__, __LINE__, s_ctrl);
@@ -168,6 +205,9 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	slave_info = s_ctrl->sensordata->slave_info;
 	sensor_name = s_ctrl->sensordata->sensor_name;
 
+#ifdef DISABLE_AFC
+	camera_id = s_ctrl->sensordata->sensor_info->position;
+#endif
 	if (!power_info || !sensor_i2c_client || !slave_info ||
 		!sensor_name) {
 		pr_err("%s:%d failed: %pK %pK %pK %pK\n",
@@ -181,6 +221,11 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 
 	CDBG("Sensor %d tagged as %s\n", s_ctrl->id,
 		(s_ctrl->is_secure)?"SECURE":"NON-SECURE");
+#ifdef DISABLE_AFC
+	if (0 == camera_id) {
+		sm5705_fled_muic_camera_flash_work_on();
+	}
+#endif
 
 	for (retry = 0; retry < 3; retry++) {
 		if (s_ctrl->is_secure) {
@@ -264,18 +309,25 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 	rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
 		sensor_i2c_client, slave_info->sensor_id_reg_addr,
 		&chipid, MSM_CAMERA_I2C_WORD_DATA);
+	pr_err("%s: slave_info->sensor_slave_addr = 0x%x \n",	__func__, slave_info->sensor_slave_addr);
+	pr_err("%s: slave_info->sensor_id_reg_addr = 0x%x \n",	__func__, slave_info->sensor_id_reg_addr);
+
+	pr_err("%s: read id: 0x%x expected id 0x%x:\n", __func__, chipid, slave_info->sensor_id);
 	if (rc < 0) {
 		pr_err("%s: %s: read id failed\n", __func__, sensor_name);
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+		return -EIO;
+#else
 		return rc;
+#endif
 	}
 
-	pr_debug("%s: read id: 0x%x expected id 0x%x:\n",
-			__func__, chipid, slave_info->sensor_id);
 	if (msm_sensor_id_by_mask(s_ctrl, chipid) != slave_info->sensor_id) {
 		pr_err("%s chip id %x does not match %x\n",
 				__func__, chipid, slave_info->sensor_id);
 		return -ENODEV;
 	}
+
 	return rc;
 }
 
@@ -385,6 +437,14 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 	struct sensorb_cfg_data32 *cdata = (struct sensorb_cfg_data32 *)argp;
 	int32_t rc = 0;
 	int32_t i = 0;
+
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+    struct cam_hw_param *hw_param = NULL;
+    uint32_t *hw_cam_position = NULL;
+    uint32_t *hw_cam_secure = NULL;
+    uint32_t *hw_cam_sensor_clk_size = NULL;
+#endif
+
 	mutex_lock(s_ctrl->msm_sensor_mutex);
 	CDBG("%s:%d %s cfgtype = %d\n", __func__, __LINE__,
 		s_ctrl->sensordata->sensor_name, cdata->cfgtype);
@@ -757,6 +817,116 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 	}
 
 	case CFG_POWER_UP:
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+		sec_sensor_position = s_ctrl->sensordata->sensor_info->position;
+		sec_sensor_clk_size = s_ctrl->sensordata->power_info.clk_info_size;
+		sec_is_securemode = s_ctrl->is_secure;
+
+		msm_is_sec_get_sensor_position(&hw_cam_position);
+		if (hw_cam_position != NULL) {
+			switch (*hw_cam_position) {
+			case BACK_CAMERA_B:
+				if (!msm_is_sec_get_rear_hw_param(&hw_param)) {
+					if (hw_param != NULL) {
+						CDBG("[HWB_DBG][R][INIT] Init\n");
+						hw_param->i2c_chk = FALSE;
+						hw_param->mipi_chk = FALSE;
+						hw_param->need_update_to_file = FALSE;
+
+						msm_is_sec_get_sensor_comp_mode(&hw_cam_sensor_clk_size);
+						switch (*hw_cam_sensor_clk_size) {
+						case CAM_HW_PARM_CLK_CNT:
+							CDBG("[HWB_DBG][R][INIT] NON_CC\n");
+							hw_param->comp_chk = FALSE;
+							break;
+
+						case CAM_HW_PARM_CC_CLK_CNT:
+							CDBG("[HWB_DBG][R][INIT] CC\n");
+							hw_param->comp_chk = TRUE;
+							break;
+
+						default:
+							pr_err("[HWB_DBG][R][INIT] Unsupport\n");
+							break;
+						}
+					}
+				}
+				break;
+
+			case FRONT_CAMERA_B:
+				msm_is_sec_get_secure_mode(&hw_cam_secure);
+				if (hw_cam_secure != NULL) {
+					switch (*hw_cam_secure) {
+					case FALSE:
+					if (!msm_is_sec_get_front_hw_param(&hw_param)) {
+						if (hw_param != NULL) {
+							CDBG("[HWB_DBG][F][INIT] Init\n");
+							hw_param->i2c_chk = FALSE;
+							hw_param->mipi_chk = FALSE;
+							hw_param->need_update_to_file = FALSE;
+
+							msm_is_sec_get_sensor_comp_mode(&hw_cam_sensor_clk_size);
+							switch (*hw_cam_sensor_clk_size) {
+							case CAM_HW_PARM_CLK_CNT:
+								CDBG("[HWB_DBG][F][INIT] NON_CC\n");
+								hw_param->comp_chk = FALSE;
+								break;
+
+							case CAM_HW_PARM_CC_CLK_CNT:
+								CDBG("[HWB_DBG][F][INIT] CC\n");
+								hw_param->comp_chk = TRUE;
+								break;
+
+							default:
+								pr_err("[HWB_DBG][F][INIT] Unsupport\n");
+								break;
+							}
+						}
+					}
+					break;
+
+					case TRUE:
+					if (!msm_is_sec_get_iris_hw_param(&hw_param)) {
+						if (hw_param != NULL) {
+							CDBG("[HWB_DBG][I][INIT] Init\n");
+							hw_param->i2c_chk = FALSE;
+							hw_param->mipi_chk = FALSE;
+							hw_param->need_update_to_file = FALSE;
+
+							msm_is_sec_get_sensor_comp_mode(&hw_cam_sensor_clk_size);
+							switch (*hw_cam_sensor_clk_size) {
+							case CAM_HW_PARM_CLK_CNT:
+								CDBG("[HWB_DBG][I][INIT] NON_CC\n");
+								hw_param->comp_chk = FALSE;
+								break;
+
+							case CAM_HW_PARM_CC_CLK_CNT:
+								CDBG("[HWB_DBG][I][INIT] CC\n");
+								hw_param->comp_chk = TRUE;
+								break;
+
+							default:
+								pr_err("[HWB_DBG][I][INIT] Unsupport\n");
+								break;
+							}
+						}
+					}
+					break;
+
+					default:
+					pr_err("[HWB_DBG][INIT] Unsupport\n");
+					break;
+					}
+				}
+				break;
+
+			default:
+				pr_err("[HWB_DBG][NON][INIT] Unsupport\n");
+				break;
+			}
+		}
+#endif
+
 		if (s_ctrl->is_csid_tg_mode)
 			goto DONE;
 
@@ -783,7 +953,175 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = -EFAULT;
 		}
 		break;
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+			if (rc == -EIO) {
+			    msm_is_sec_get_sensor_position(&hw_cam_position);
+				if (hw_cam_position != NULL) {
+					switch (*hw_cam_position) {
+					case BACK_CAMERA_B:
+						if (!msm_is_sec_get_rear_hw_param(&hw_param)) {
+							if (hw_param != NULL) {
+								pr_err("[HWB_DBG][R][I2C] Err\n");
+								hw_param->i2c_sensor_err_cnt++;
+								hw_param->need_update_to_file = TRUE;
+							}
+						}
+						break;
+
+					case FRONT_CAMERA_B:
+						msm_is_sec_get_secure_mode(&hw_cam_secure);
+						if (hw_cam_secure != NULL) {
+							switch (*hw_cam_secure) {
+							case FALSE:
+								if (!msm_is_sec_get_front_hw_param(&hw_param)) {
+									if (hw_param != NULL) {
+										pr_err("[HWB_DBG][F][I2C] Err\n");
+										hw_param->i2c_sensor_err_cnt++;
+										hw_param->need_update_to_file = TRUE;
+									}
+								}
+								break;
+
+							case TRUE:
+								if (!msm_is_sec_get_iris_hw_param(&hw_param)) {
+									if (hw_param != NULL) {
+										pr_err("[HWB_DBG][I][I2C] Err\n");
+										hw_param->i2c_sensor_err_cnt++;
+										hw_param->need_update_to_file = TRUE;
+									}
+								}
+								break;
+
+							default:
+								break;
+							}
+						}
+						break;
+
+					default:
+						pr_err("[HWB_DBG][NON][I2C] Unsupport\n");
+						break;
+				    }
+				}
+			    }
+			break;
+		    }
+	    } else {
+			rc = -EFAULT;
+		}
+	    break;
+#endif
 	case CFG_POWER_DOWN:
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+		sec_sensor_position = s_ctrl->sensordata->sensor_info->position;
+		sec_sensor_clk_size = s_ctrl->sensordata->power_info.clk_info_size;
+		sec_is_securemode = s_ctrl->is_secure;
+
+		msm_is_sec_get_sensor_position(&hw_cam_position);
+		if (hw_cam_position != NULL) {
+			switch (*hw_cam_position) {
+			case BACK_CAMERA_B:
+				if (!msm_is_sec_get_rear_hw_param(&hw_param)) {
+					if (hw_param != NULL) {
+						CDBG("[HWB_DBG][R][INIT] Init\n");
+						hw_param->i2c_chk = FALSE;
+						hw_param->mipi_chk = FALSE;
+						hw_param->need_update_to_file = FALSE;
+
+						msm_is_sec_get_sensor_comp_mode(&hw_cam_sensor_clk_size);
+						switch (*hw_cam_sensor_clk_size) {
+						case CAM_HW_PARM_CLK_CNT:
+							CDBG("[HWB_DBG][R][INIT] NON_CC\n");
+							hw_param->comp_chk = FALSE;
+							break;
+
+						case CAM_HW_PARM_CC_CLK_CNT:
+							CDBG("[HWB_DBG][R][INIT] CC\n");
+							hw_param->comp_chk = TRUE;
+							break;
+
+						default:
+							pr_err("[HWB_DBG][R][INIT] Unsupport\n");
+							break;
+						}
+					}
+				}
+				break;
+
+			case FRONT_CAMERA_B:
+				msm_is_sec_get_secure_mode(&hw_cam_secure);
+				if (hw_cam_secure != NULL) {
+					switch (*hw_cam_secure) {
+					case FALSE:
+						if (!msm_is_sec_get_front_hw_param(&hw_param)) {
+							if (hw_param != NULL) {
+								CDBG("[HWB_DBG][F][INIT] Init\n");
+								hw_param->i2c_chk = FALSE;
+								hw_param->mipi_chk = FALSE;
+								hw_param->need_update_to_file = FALSE;
+
+								msm_is_sec_get_sensor_comp_mode(&hw_cam_sensor_clk_size);
+								switch (*hw_cam_sensor_clk_size) {
+								case CAM_HW_PARM_CLK_CNT:
+									CDBG("[HWB_DBG][F][INIT] NON_CC\n");
+									hw_param->comp_chk = FALSE;
+									break;
+
+								case CAM_HW_PARM_CC_CLK_CNT:
+									CDBG("[HWB_DBG][F][INIT] CC\n");
+									hw_param->comp_chk = TRUE;
+									break;
+
+								default:
+									pr_err("[HWB_DBG][F][INIT] Unsupport\n");
+									break;
+								}
+							}
+						}
+					break;
+
+					case TRUE:
+							if (!msm_is_sec_get_iris_hw_param(&hw_param)) {
+								if (hw_param != NULL) {
+									CDBG("[HWB_DBG][I][INIT] Init\n");
+									hw_param->i2c_chk = FALSE;
+									hw_param->mipi_chk = FALSE;
+									hw_param->need_update_to_file = FALSE;
+
+									msm_is_sec_get_sensor_comp_mode(&hw_cam_sensor_clk_size);
+									switch (*hw_cam_sensor_clk_size) {
+									case CAM_HW_PARM_CLK_CNT:
+										CDBG("[HWB_DBG][I][INIT] NON_CC\n");
+										hw_param->comp_chk = FALSE;
+										break;
+
+									case CAM_HW_PARM_CC_CLK_CNT:
+										CDBG("[HWB_DBG][I][INIT] CC\n");
+										hw_param->comp_chk = TRUE;
+										break;
+
+									default:
+										pr_err("[HWB_DBG][I][INIT] Unsupport\n");
+										break;
+									}
+								}
+						}
+					break;
+
+					default:
+					pr_err("[HWB_DBG][INIT] Unsupport\n");
+					break;
+					}
+				}
+				break;
+
+			default:
+				pr_err("[HWB_DBG][NON][INIT] Unsupport\n");
+				break;
+			}
+		}
+#endif
+
 		if (s_ctrl->is_csid_tg_mode)
 			goto DONE;
 
@@ -1414,6 +1752,190 @@ static int msm_sensor_power(struct v4l2_subdev *sd, int on)
 	mutex_unlock(s_ctrl->msm_sensor_mutex);
 	return rc;
 }
+
+#if defined(CONFIG_USE_CAMERA_HW_BIG_DATA)
+void msm_is_sec_init_all_cnt(void)
+{
+	pr_err("[HWB_DBG] All_Init_Cnt\n");
+	memset(&cam_hwparam_collector, 0, sizeof(struct cam_hw_param_collector));
+}
+
+void msm_is_sec_init_err_cnt_file(struct cam_hw_param *hw_param)
+{
+	if (hw_param != NULL) {
+		pr_err("[HWB_DBG] Init_Cnt\n");
+		memset(hw_param, 0, sizeof(struct cam_hw_param));
+		msm_is_sec_copy_err_cnt_to_file();
+	} else {
+		pr_err("[HWB_DBG] NULL\n");
+	}
+}
+
+void msm_is_sec_dbg_check(void)
+{
+	CDBG("[HWB_DBG] Dbg E\n");
+	CDBG("[HWB_DBG] Dbg X\n");
+}
+
+void msm_is_sec_copy_err_cnt_to_file(void)
+{
+#if defined(HWB_FILE_OPERATION)
+	struct file *fp = NULL;
+	mm_segment_t old_fs;
+	long nwrite = 0;
+	int old_mask = 0;
+
+	CDBG("[HWB_DBG] To_F\n");
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+	old_mask = sys_umask(0);
+
+	fp = filp_open(CAM_HW_ERR_CNT_FILE_PATH, O_WRONLY | O_CREAT | O_TRUNC | O_SYNC, 0660);
+	if (IS_ERR_OR_NULL(fp)) {
+		pr_err("[HWB_DBG][To_F] Err\n");
+		sys_umask(old_mask);
+		set_fs(old_fs);
+		return;
+	}
+
+	nwrite = vfs_write(fp, (char *)&cam_hwparam_collector, sizeof(struct cam_hw_param_collector), &fp->f_pos);
+
+	filp_close(fp, NULL);
+	fp = NULL;
+	sys_umask(old_mask);
+	set_fs(old_fs);
+#endif
+
+	return;
+}
+
+void msm_is_sec_copy_err_cnt_from_file(void)
+{
+#if defined(HWB_FILE_OPERATION)
+	struct file *fp = NULL;
+	mm_segment_t old_fs;
+	long nread = 0;
+	int ret = 0;
+
+	ret = msm_is_sec_file_exist(CAM_HW_ERR_CNT_FILE_PATH, HW_PARAMS_NOT_CREATED);
+	if (ret == 1) {
+		CDBG("[HWB_DBG] From_F\n");
+		old_fs = get_fs();
+		set_fs(KERNEL_DS);
+
+		fp = filp_open(CAM_HW_ERR_CNT_FILE_PATH, O_RDONLY, 0660);
+		if (IS_ERR_OR_NULL(fp)) {
+			pr_err("[HWB_DBG][From_F] Err\n");
+			set_fs(old_fs);
+			return;
+		}
+
+		nread = vfs_read(fp, (char *)&cam_hwparam_collector, sizeof(struct cam_hw_param_collector), &fp->f_pos);
+
+		filp_close(fp, NULL);
+		fp = NULL;
+		set_fs(old_fs);
+	} else {
+		pr_err("[HWB_DBG] NoEx_F\n");
+	}
+#endif
+
+	return;
+}
+
+int msm_is_sec_file_exist(char *filename, hw_params_check_type chktype)
+{
+	int ret = 0;
+#if defined(HWB_FILE_OPERATION)
+	struct file *fp = NULL;
+	mm_segment_t old_fs;
+	long nwrite = 0;
+	int old_mask = 0;
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	if (sys_access(filename, 0) == 0) {
+		CDBG("[HWB_DBG] Ex_F\n");
+		ret = 1;
+	} else {
+		switch (chktype) {
+		case HW_PARAMS_CREATED:
+			pr_err("[HWB_DBG] Ex_Cr\n");
+			msm_is_sec_init_all_cnt();
+
+			old_mask = sys_umask(0);
+
+			fp = filp_open(CAM_HW_ERR_CNT_FILE_PATH, O_WRONLY | O_CREAT | O_TRUNC | O_SYNC, 0660);
+			if (IS_ERR_OR_NULL(fp)) {
+				pr_err("[HWB_DBG][Ex_F] ERROR\n");
+				ret = 0;
+			} else {
+				nwrite = vfs_write(fp, (char *)&cam_hwparam_collector, sizeof(struct cam_hw_param_collector), &fp->f_pos);
+
+				filp_close(fp, current->files);
+				fp = NULL;
+				ret = 2;
+			}
+			sys_umask(old_mask);
+			break;
+
+		case HW_PARAMS_NOT_CREATED:
+			CDBG("[HWB_DBG] Ex_NoCr\n");
+			ret = 0;
+			break;
+
+		default:
+			pr_err("[HWB_DBG] Ex_Err\n");
+			ret = 0;
+			break;
+		}
+	}
+
+	set_fs(old_fs);
+#endif
+
+	return ret;
+}
+
+int msm_is_sec_get_secure_mode(uint32_t **cam_secure)
+{
+	*cam_secure = &sec_is_securemode;
+	return 0;
+}
+
+int msm_is_sec_get_sensor_position(uint32_t **cam_position)
+{
+	*cam_position = &sec_sensor_position;
+	return 0;
+}
+
+int msm_is_sec_get_sensor_comp_mode(uint32_t **sensor_clk_size)
+{
+	*sensor_clk_size = &sec_sensor_clk_size;
+	return 0;
+}
+
+int msm_is_sec_get_rear_hw_param(struct cam_hw_param **hw_param)
+{
+	*hw_param = &cam_hwparam_collector.rear_hwparam;
+	return 0;
+}
+
+int msm_is_sec_get_front_hw_param(struct cam_hw_param **hw_param)
+{
+	*hw_param = &cam_hwparam_collector.front_hwparam;
+	return 0;
+}
+
+int msm_is_sec_get_iris_hw_param(struct cam_hw_param **hw_param)
+{
+	*hw_param = &cam_hwparam_collector.iris_hwparam;
+	return 0;
+}
+#endif
+
 
 static int msm_sensor_v4l2_enum_fmt(struct v4l2_subdev *sd,
 	unsigned int index, enum v4l2_mbus_pixelcode *code)

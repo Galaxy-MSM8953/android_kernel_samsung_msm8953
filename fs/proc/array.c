@@ -174,14 +174,22 @@ static inline void task_state(struct seq_file *m, struct pid_namespace *ns,
 	seq_printf(m,
 		"State:\t%s\n"
 		"Tgid:\t%d\n"
+#ifndef CONFIG_PROC_TASK_STATE_CHN_ORDER
+		"Ngid:\t%d\n"
+#endif
 		"Pid:\t%d\n"
 		"PPid:\t%d\n"
 		"TracerPid:\t%d\n"
 		"Uid:\t%d\t%d\t%d\t%d\n"
 		"Gid:\t%d\t%d\t%d\t%d\n"
-		"Ngid:\t%d\n",
-		get_task_state(p),
+#ifdef CONFIG_PROC_TASK_STATE_CHN_ORDER
+		"Ngid:\t%d\n"
+#endif
+		,get_task_state(p),
 		leader ? task_pid_nr_ns(leader, ns) : 0,
+#ifndef CONFIG_PROC_TASK_STATE_CHN_ORDER
+		task_numa_group_id(p),
+#endif
 		pid_nr_ns(pid, ns),
 		ppid, tpid,
 		from_kuid_munged(user_ns, cred->uid),
@@ -191,8 +199,11 @@ static inline void task_state(struct seq_file *m, struct pid_namespace *ns,
 		from_kgid_munged(user_ns, cred->gid),
 		from_kgid_munged(user_ns, cred->egid),
 		from_kgid_munged(user_ns, cred->sgid),
-		from_kgid_munged(user_ns, cred->fsgid),
-		task_numa_group_id(p));
+		from_kgid_munged(user_ns, cred->fsgid)
+#ifdef CONFIG_PROC_TASK_STATE_CHN_ORDER
+		,task_numa_group_id(p)
+#endif
+	);
 
 	task_lock(p);
 	if (p->files)
@@ -578,7 +589,31 @@ int proc_pid_statm(struct seq_file *m, struct pid_namespace *ns,
 
 	return 0;
 }
+int proc_pid_statlmkd(struct seq_file *m, struct pid_namespace *ns,
+			struct pid *pid, struct task_struct *task)
+{
+	struct mm_struct *mm = get_task_mm(task);
+#ifdef CONFIG_MMU
+	unsigned long size = 0, resident = 0, swapresident = 0;
+	if (mm) {
+		task_statlmkd(mm, &size, &resident, &swapresident);
+		mmput(mm);
+	}
+#endif
+#ifndef CONFIG_MMU
+	unsigned long size = 0, resident = 0, shared = 0, text = 0, data = 0;
+	if (mm) {
+		size = task_statm(mm, &shared, &text, &data, &resident);
+		mmput(mm);
+	}
+#endif
+	seq_put_decimal_ull(m, 0, size);
+	seq_put_decimal_ull(m, ' ', resident);
+	seq_put_decimal_ull(m, ' ', swapresident);
+	seq_putc(m, '\n');
 
+	return 0;
+}
 #ifdef CONFIG_CHECKPOINT_RESTORE
 static struct pid *
 get_children_pid(struct inode *inode, struct pid *pid_prev, loff_t pos)

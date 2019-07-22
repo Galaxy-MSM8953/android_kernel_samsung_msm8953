@@ -1853,10 +1853,12 @@ struct dentry *d_make_root(struct inode *root_inode)
 		static const struct qstr name = QSTR_INIT("/", 1);
 
 		res = __d_alloc(root_inode->i_sb, &name);
-		if (res)
+		if (res) {
+			res->d_flags |= DCACHE_RCUACCESS;
 			d_instantiate(res, root_inode);
-		else
+		} else {
 			iput(root_inode);
+		}
 	}
 	return res;
 }
@@ -3485,8 +3487,10 @@ EXPORT_SYMBOL(d_genocide);
 
 void __init vfs_caches_init_early(void)
 {
+	set_memsize_kernel_type(MEMSIZE_KERNEL_VFSHASH);
 	dcache_init_early();
 	inode_init_early();
+	set_memsize_kernel_type(MEMSIZE_KERNEL_OTHERS);
 }
 
 void __init vfs_caches_init(unsigned long mempages)
