@@ -515,7 +515,11 @@ static int fsg_set_halt(struct fsg_dev *fsg, struct usb_ep *ep)
 /* Caller must hold fsg->lock */
 static void wakeup_thread(struct fsg_common *common)
 {
-	smp_wmb();	/* ensure the write of bh->state is complete */
+	/*
+	 * Ensure the reading of thread_wakeup_needed
+	 * and the writing of bh->state are completed
+	 */
+	smp_mb();
 	/* Tell the main thread that something has happened */
 	common->thread_wakeup_needed = 1;
 	if (common->thread_task)
@@ -761,7 +765,12 @@ static int sleep_thread(struct fsg_common *common, bool can_freeze)
 	spin_lock_irq(&common->lock);
 	common->thread_wakeup_needed = 0;
 	spin_unlock_irq(&common->lock);
-	smp_rmb();	/* ensure the latest bh->state is visible */
+
+	/*
+	 * Ensure the writing of thread_wakeup_needed
+	 * and the reading of bh->state are completed
+	 */
+	smp_mb();
 	return rc;
 }
 
@@ -3186,6 +3195,13 @@ static int fsg_main_thread(void *common_)
 
 /*************************** DEVICE ATTRIBUTES ***************************/
 
+static ssize_t cdrom_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct fsg_lun		*curlun = fsg_lun_from_dev(dev);
+
+	return fsg_show_cdrom(curlun, buf);
+}
+
 static ssize_t ro_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fsg_lun		*curlun = fsg_lun_from_dev(dev);
@@ -3208,6 +3224,15 @@ static ssize_t file_show(struct device *dev, struct device_attribute *attr,
 	struct rw_semaphore	*filesem = dev_get_drvdata(dev);
 
 	return fsg_show_file(curlun, filesem, buf);
+}
+
+static ssize_t cdrom_store(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count)
+{
+	struct fsg_lun		*curlun = fsg_lun_from_dev(dev);
+	struct rw_semaphore	*filesem = dev_get_drvdata(dev);
+
+	return fsg_store_cdrom(curlun, filesem, buf, count);
 }
 
 static ssize_t ro_store(struct device *dev, struct device_attribute *attr,
@@ -3236,12 +3261,12 @@ static ssize_t file_store(struct device *dev, struct device_attribute *attr,
 	return fsg_store_file(curlun, filesem, buf, count);
 }
 
+static DEVICE_ATTR_RW(cdrom);
 static DEVICE_ATTR_RW(ro);
 static DEVICE_ATTR_RW(nofua);
 static DEVICE_ATTR_RW(file);
 static DEVICE_ATTR(perf, 0644, fsg_show_perf, fsg_store_perf);
 
-static struct device_attribute dev_attr_ro_cdrom = __ATTR_RO(ro);
 static struct device_attribute dev_attr_file_nonremovable = __ATTR_RO(file);
 
 
@@ -3387,6 +3412,7 @@ static inline void fsg_common_remove_sysfs(struct fsg_lun *lun)
 	 * so we don't differentiate between removing e.g. dev_attr_ro_cdrom
 	 * and dev_attr_ro
 	 */
+	device_remove_file(&lun->dev, &dev_attr_cdrom);
 	device_remove_file(&lun->dev, &dev_attr_ro);
 	device_remove_file(&lun->dev, &dev_attr_file);
 	device_remove_file(&lun->dev, &dev_attr_perf);
@@ -3512,10 +3538,10 @@ static inline int fsg_common_add_sysfs(struct fsg_common *common,
 		return rc;
 	}
 
-	rc = device_create_file(&lun->dev,
-				lun->cdrom
-			      ? &dev_attr_ro_cdrom
-			      : &dev_attr_ro);
+	rc = device_create_file(&lun->dev, &dev_attr_cdrom);
+	if (rc)
+		goto error;
+	rc = device_create_file(&lun->dev, &dev_attr_ro);
 	if (rc)
 		goto error;
 	rc = device_create_file(&lun->dev,

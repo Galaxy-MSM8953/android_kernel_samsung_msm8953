@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -717,13 +717,16 @@ long msm_ion_custom_ioctl(struct ion_client *client,
 		struct mm_struct *mm = current->active_mm;
 
 		if (data.flush_data.handle > 0) {
-			handle = ion_handle_get_by_id(client,
+			mutex_lock(&client->lock);
+			handle = ion_handle_get_by_id_nolock(client,
 						(int)data.flush_data.handle);
 			if (IS_ERR(handle)) {
+				mutex_unlock(&client->lock);
 				pr_info("%s: Could not find handle: %d\n",
 					__func__, (int)data.flush_data.handle);
 				return PTR_ERR(handle);
 			}
+			mutex_unlock(&client->lock);
 		} else {
 			handle = ion_import_dma_buf(client, data.flush_data.fd);
 			if (IS_ERR(handle)) {
@@ -739,7 +742,7 @@ long msm_ion_custom_ioctl(struct ion_client *client,
 			data.flush_data.offset;
 		end = start + data.flush_data.length;
 
-		if (check_vaddr_bounds(start, end)) {
+		if (start && check_vaddr_bounds(start, end)) {
 			pr_err("%s: virtual address %pK is out of bounds\n",
 				__func__, data.flush_data.vaddr);
 			ret = -EINVAL;

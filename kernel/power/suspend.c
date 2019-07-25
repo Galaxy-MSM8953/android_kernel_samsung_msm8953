@@ -269,6 +269,7 @@ static int suspend_prepare(suspend_state_t state)
 		goto Finish;
 	}
 
+#ifdef CONFIG_PM_SYNC_BEFORE_SUSPEND
 	trace_suspend_resume(TPS("sync_filesystems"), 0, true);
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	if (intr_sync(NULL)) {
@@ -279,6 +280,7 @@ static int suspend_prepare(suspend_state_t state)
 	}
 	printk("done.\n");
 	trace_suspend_resume(TPS("sync_filesystems"), 0, false);
+#endif
 
 	trace_suspend_resume(TPS("freeze_processes"), 0, true);
 	error = suspend_freeze_processes();
