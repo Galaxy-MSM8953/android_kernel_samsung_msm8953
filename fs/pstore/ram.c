@@ -594,13 +594,16 @@ static int ramoops_parse_dt(struct platform_device *pdev,
 static int ramoops_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct ramoops_platform_data *pdata = dev->platform_data;
+	struct ramoops_platform_data *pdata;
 	struct ramoops_context *cxt = &oops_cxt;
 	size_t dump_mem_sz;
 	phys_addr_t paddr;
 	int err = -EINVAL;
 
-	if (dev->of_node && !pdata) {
+	if (pdev->dev.of_node)
+		ramoops_of_init(pdev);
+
+	if (dev->of_node && !dev->platform_data) {
 		pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
 		if (!pdata) {
 			err = -ENOMEM;
