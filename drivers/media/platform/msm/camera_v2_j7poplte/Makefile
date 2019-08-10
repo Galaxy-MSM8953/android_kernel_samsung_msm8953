@@ -1,14 +1,14 @@
-ccflags-y += -Idrivers/media/platform/msm/camera_v2
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/codecs
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/isps
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/pproc
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/msm_vb2
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/camera
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/jpeg_10
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/jpeg_dma
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/fd
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/common
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/sensor
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/codecs
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/isps
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/pproc
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/msm_vb2
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/camera
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/jpeg_10
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/jpeg_dma
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/fd
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/common
 
 obj-$(CONFIG_MSMB_CAMERA) += common/
 obj-$(CONFIG_MSMB_CAMERA) += msm.o

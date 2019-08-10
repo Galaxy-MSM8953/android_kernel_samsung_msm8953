@@ -1,6 +1,6 @@
-ccflags-y += -Idrivers/media/platform/msm/camera_v2
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/common
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/io
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/cci
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/common
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/sensor/io
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/sensor/cci
 obj-$(CONFIG_MSM_EEPROM) += msm_eeprom.o
 obj-$(CONFIG_MSM_FRONT_OTP) += msm_otp.o

@@ -1,8 +1,8 @@
-ccflags-y += -Idrivers/media/platform/msm/camera_v2
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/common
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/io
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/cci
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/common
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/sensor/io
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/sensor/cci
 ifdef CONFIG_USE_CAMERA_HW_BIG_DATA
-ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor
+ccflags-y += -Idrivers/media/platform/msm/camera_v2_j7poplte/sensor
 endif
 obj-$(CONFIG_MSMB_CAMERA) += msm_actuator.o
