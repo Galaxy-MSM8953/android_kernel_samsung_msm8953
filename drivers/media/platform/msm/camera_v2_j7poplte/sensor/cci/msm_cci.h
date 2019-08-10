@@ -18,8 +18,8 @@
 #include <linux/platform_device.h>
 #include <media/v4l2-subdev.h>
 #include <linux/workqueue.h>
-#include <media/msm_cam_sensor.h>
-#include <soc/qcom/camera2.h>
+#include "../../include/media/msm_cam_sensor.h"
+#include "../../include/soc/qcom/camera2.h"
 #include "msm_sd.h"
 
 #define NUM_MASTERS 2

@@ -18,8 +18,8 @@
 #include <linux/clk.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
-#include <soc/qcom/camera2.h>
-#include <media/msm_cam_sensor.h>
+#include "../include/soc/qcom/camera2.h"
+#include "../include/media/msm_cam_sensor.h"
 #include <media/v4l2-ioctl.h>
 
 #define NO_SET_RATE -1

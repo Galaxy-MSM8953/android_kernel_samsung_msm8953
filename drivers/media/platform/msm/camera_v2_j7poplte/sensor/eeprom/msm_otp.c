@@ -18,7 +18,7 @@
 #include "msm_sd.h"
 #include "msm_cci.h"
 #include "msm_otp.h"
-#include <media/msm_cam_sensor.h>
+#include "../../include/media/msm_cam_sensor.h"
 
 
 

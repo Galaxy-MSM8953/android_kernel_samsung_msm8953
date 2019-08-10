@@ -14,7 +14,7 @@
 
 #include <linux/i2c.h>
 #include <linux/gpio.h>
-#include <soc/qcom/camera2.h>
+#include "../../include/soc/qcom/camera2.h"
 #include <media/v4l2-subdev.h>
 #include <media/msmb_camera.h>
 #include "msm_camera_i2c.h"
@@ -35,7 +35,8 @@ struct msm_eeprom_ctrl_t;
 #define r_otp_cmd        0x0102
 #define r_otp_wdata      0x0106
 #define r_otp_rdata      0x0108
- #define START_ADDR_FOR_S5K5E3_OTP 0xA04
+
+ #define START_ADDR_FOR_S5K5E3_OTP 0xA04
 struct msm_eeprom_ctrl_t {
 	struct platform_device *pdev;
 	struct mutex *eeprom_mutex;
@@ -56,4 +57,4 @@ struct msm_eeprom_ctrl_t {
 extern uint8_t* get_eeprom_data_addr(void);
 #endif
 
-
+
